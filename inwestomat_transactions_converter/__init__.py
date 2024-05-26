@@ -47,14 +47,15 @@ def convert_binance_tx(
             sell_amount = btx.total
             buy_amount = btx.amount
         case TxType.SELL:
-            raise NotImplementedError
+            sell_ticker, buy_ticker = btx.market
+            sell_amount = btx.amount
+            buy_amount = btx.total
 
     sell_price = pln_prices[sell_ticker]
     buy_price = pln_prices[buy_ticker]
 
     sell_total_pln = sell_amount * sell_price
     buy_total_pln = buy_amount * buy_price
-    assert sell_total_pln == buy_total_pln
 
     sell_fee = buy_fee = Decimal()
     if btx.fee_coin == buy_ticker:
