@@ -1,7 +1,7 @@
 import datetime
 from decimal import Decimal
 
-from inwestomat_transactions_converter import (
+from inwestomat_transactions import (
     BinanceTx,
     convert_binance_tx,
     InwestomatTx,
