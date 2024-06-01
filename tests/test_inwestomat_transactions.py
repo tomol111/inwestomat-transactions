@@ -1,17 +1,21 @@
-import datetime
+from datetime import datetime
 from decimal import Decimal
+from unittest import mock
 
 from inwestomat_transactions import (
     BinanceTx,
     convert_binance_tx,
+    find_pln_prices,
+    get_price,
     InwestomatTx,
     TxType,
+    Ticker,
 )
 
 
 class Test_convert_binance_tx:
     def test_should_convert_buy_transaction(self) -> None:
-        date = datetime.datetime.fromisoformat("2024-05-05 00:34:09")
+        date = datetime.fromisoformat("2024-05-05 00:34:09")
         btx = BinanceTx(
             date=date,
             market=("ADA", "BTC"),
@@ -46,7 +50,7 @@ class Test_convert_binance_tx:
         )
 
     def test_should_convert_sell_transaction(self) -> None:
-        date = datetime.datetime.fromisoformat("2024-05-01 10:17:28")
+        date = datetime.fromisoformat("2024-05-01 10:17:28")
         btx = BinanceTx(
             date=date,
             market=("ADA", "BTC"),
@@ -79,3 +83,45 @@ class Test_convert_binance_tx:
             total_pln=Decimal("42.36014544"),
             fee=Decimal("0.04196844"),
         )
+
+
+class Test_get_price:
+    def test_should_return_price_of_currency(self) -> None:
+        def fake_get_historical_klines(
+            market: str, interval: str, start: int, end: int
+        ) -> list[list]:
+            assert market == "BTCPLN"
+            assert interval == "1s"
+            assert start == 1714558648000
+            assert end == 1714558648001
+            return [[
+                1714558648000, "233158.00000000", "233158.00000000", "233158.00000000",
+                "233158.00000000", "0.00000000", 1714558648999, "0.00000000", 0,
+                "0.00000000", "0.00000000", "0"
+            ]]
+        mock_client = mock.Mock()
+        mock_client.get_historical_klines.side_effect = fake_get_historical_klines
+
+        price = get_price(
+            mock_client,
+            ("BTC", "PLN"),
+            datetime.fromisoformat("2024-05-01 10:17:28+00:00"),
+        )
+
+        assert price == Decimal("233158")
+
+
+class Test_find_pln_prices:
+    def test_should_return_prices_in_pln(self) -> None:
+        def fake_get_price(market: tuple[Ticker, Ticker], date: datetime) -> Decimal:
+            assert market == ("BTC", "PLN")
+            return Decimal("233158")
+
+        result = find_pln_prices(
+            fake_get_price,
+            ("ADA", "BTC"),
+            Decimal("0.00000757"),
+            datetime.fromisoformat("2024-05-01 10:17:28+00:00"),
+        )
+
+        assert result == {"ADA": Decimal("1.76500606"), "BTC": Decimal("233158")}

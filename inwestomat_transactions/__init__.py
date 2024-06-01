@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import dataclasses
-import datetime
+from datetime import datetime
 import enum
 from decimal import Decimal
-from typing import TypeAlias
+from typing import Callable, TypeAlias
+
+import binance
 
 
 Ticker: TypeAlias = str
@@ -17,7 +19,7 @@ class TxType(enum.Enum):
 
 @dataclasses.dataclass(frozen=True)
 class BinanceTx:
-    date: datetime.datetime
+    date: datetime
     market: tuple[Ticker, Ticker]
     type: TxType
     amount: Decimal
@@ -29,7 +31,7 @@ class BinanceTx:
 
 @dataclasses.dataclass(frozen=True)
 class InwestomatTx:
-    date: datetime.datetime
+    date: datetime
     ticker: Ticker
     type: TxType
     amount: Decimal
@@ -81,3 +83,49 @@ def convert_binance_tx(
         fee=buy_fee,
     )
     return [sell_tx, buy_tx]
+
+
+class KLineValue(enum.Enum):
+    OPEN_TIME = 0
+    OPEN = 1
+    HIGH = 2
+    LOW = 3
+    CLOSE = 4
+    VOLUME = 5
+    CLOSE_TIME = 6
+    QUOTE_ASSET_VOLUME = 7
+    NUMER_OF_TRADES = 8
+    TAKER_BUY_BASE_ASSET_VOLUME = 9
+    TAKER_BUY_QUOTE_ASSET_VOLUME = 10
+    IGNORE = 11
+
+    def __index__(self) -> int:
+        return self.value
+
+
+def get_price(
+    client: binance.Client,
+    market: tuple[Ticker, Ticker],
+    date: datetime,
+) -> Decimal:
+    assert date.tzinfo
+    assert not date.microsecond
+    start = int(date.timestamp() * 1000)
+    end = start + 1
+    klines: list[list] = client.get_historical_klines("".join(market), "1s", start, end)
+    return Decimal(klines[0][KLineValue.CLOSE])
+
+
+def find_pln_prices(
+    get_price: Callable[[tuple[Ticker, Ticker], datetime], Decimal],
+    market: tuple[Ticker, Ticker],
+    price: Decimal,
+    date: datetime,
+) -> dict[Ticker, Decimal]:
+    base_asset, quote_asset = market
+    quote_asset_in_pln = get_price((quote_asset, "PLN"), date)
+    base_asset_in_pln = price * quote_asset_in_pln
+    return {
+        base_asset: base_asset_in_pln,
+        quote_asset: quote_asset_in_pln,
+    }
