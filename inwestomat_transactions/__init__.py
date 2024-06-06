@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import dataclasses
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 from decimal import Decimal
-from typing import Callable, TypeAlias
+from typing import Callable, Final, Iterator, TypeAlias
 
 import binance
+import openpyxl
 
 
 Ticker: TypeAlias = str
@@ -129,3 +130,39 @@ def find_pln_prices(
         base_asset: base_asset_in_pln,
         quote_asset: quote_asset_in_pln,
     }
+
+
+def read_binance_transactions(file_path: str) -> list[BinanceTx]:
+    data: Iterator = openpyxl.load_workbook(file_path, read_only=True).active.values
+
+    next(data)  # usuń nagłówek z nazwami
+
+    result = list[BinanceTx]()
+    for date, market, typ, price, amount, total, fee, fee_coin in data:
+        if date is None:
+            break
+        result.append(BinanceTx(
+            date=datetime.fromisoformat(date).replace(tzinfo=timezone.utc),
+            market=identify_binance_market_assets(market),
+            type=TxType(typ),
+            price=Decimal(price),
+            amount=Decimal(amount),
+            total=Decimal(total),
+            fee=Decimal(fee),
+            fee_coin=fee_coin,
+        ))
+
+    return result
+
+
+BINANCE_QUOTE_ASSETS: Final = (
+    "USDT", "BTC", "TRY", "FDUSD", "USDC", "ETH", "BNB", "EUR", "TUSD", "BRL", "JPY",
+    "DAI", "UAH", "PLN", "RON", "ZAR", "MXN", "ARS", "XRP", "TRX", "DOGE", "CZK", "IDRT",
+)
+
+
+def identify_binance_market_assets(market: str) -> tuple[Ticker, Ticker]:
+    for quote_asset in BINANCE_QUOTE_ASSETS:
+        if market.endswith(quote_asset):
+            return (market.removesuffix(quote_asset), quote_asset)
+    raise NotImplementedError("Unkown quote asset")

@@ -8,8 +8,9 @@ from inwestomat_transactions import (
     find_pln_prices,
     get_price,
     InwestomatTx,
-    TxType,
+    read_binance_transactions,
     Ticker,
+    TxType,
 )
 
 
@@ -125,3 +126,44 @@ class Test_find_pln_prices:
         )
 
         assert result == {"ADA": Decimal("1.76500606"), "BTC": Decimal("233158")}
+
+
+class Test_read_binance_transactions:
+    def test_should_(self) -> None:
+        file_path = "tests/binance_transactions.xlsx"
+        expected = [
+            BinanceTx(
+                date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
+                market=("ETH", "BTC"),
+                type=TxType.BUY,
+                price=Decimal("0.04841"),
+                amount=Decimal("0.005"),
+                total=Decimal("0.00024205"),
+                fee=Decimal("0.000005"),
+                fee_coin="ETH",
+            ),
+            BinanceTx(
+                date=datetime.fromisoformat("2024-05-05 00:34:09+00:00"),
+                market=("ADA", "BTC"),
+                type=TxType.BUY,
+                price=Decimal("0.0000072"),
+                amount=Decimal("24"),
+                total=Decimal("0.0001728"),
+                fee=Decimal("0.024"),
+                fee_coin="ADA",
+            ),
+            BinanceTx(
+                date=datetime.fromisoformat("2024-05-01 10:17:28+00:00"),
+                market=("ADA", "BTC"),
+                type=TxType.SELL,
+                price=Decimal("0.00000757"),
+                amount=Decimal("24"),
+                total=Decimal("0.00018168"),
+                fee=Decimal("0.00000018"),
+                fee_coin="BTC",
+            ),
+        ]
+
+        result = read_binance_transactions(file_path)
+
+        assert result == expected
