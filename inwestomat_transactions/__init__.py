@@ -11,6 +11,7 @@ import openpyxl
 
 
 Ticker: TypeAlias = str
+Market: TypeAlias = tuple[Ticker, Ticker]
 
 
 class TxType(enum.Enum):
@@ -21,7 +22,7 @@ class TxType(enum.Enum):
 @dataclasses.dataclass(frozen=True)
 class BinanceTx:
     date: datetime
-    market: tuple[Ticker, Ticker]
+    market: Market
     type: TxType
     amount: Decimal
     price: Decimal
@@ -41,7 +42,17 @@ class InwestomatTx:
     fee: Decimal
 
 
-def convert_binance_tx(
+def convert_binance_tx(btx: BinanceTx, client: binance.Client) -> list[InwestomatTx]:
+    pln_prices = find_pln_prices(
+        lambda market: get_price(client, btx.date, market),
+        btx.market,
+        btx.price,
+    )
+    result = split_binance_tx_to_inwestomat_txs(btx, pln_prices)
+    return result
+
+
+def split_binance_tx_to_inwestomat_txs(
     btx: BinanceTx, pln_prices: dict[Ticker, Decimal]
 ) -> list[InwestomatTx]:
     match btx.type:
@@ -104,11 +115,7 @@ class KLineValue(enum.Enum):
         return self.value
 
 
-def get_price(
-    client: binance.Client,
-    market: tuple[Ticker, Ticker],
-    date: datetime,
-) -> Decimal:
+def get_price(client: binance.Client, date: datetime, market: Market) -> Decimal:
     assert date.tzinfo
     assert not date.microsecond
     start = int(date.timestamp() * 1000)
@@ -118,13 +125,10 @@ def get_price(
 
 
 def find_pln_prices(
-    get_price: Callable[[tuple[Ticker, Ticker], datetime], Decimal],
-    market: tuple[Ticker, Ticker],
-    price: Decimal,
-    date: datetime,
+    get_price: Callable[[Market], Decimal], market: Market, price: Decimal
 ) -> dict[Ticker, Decimal]:
     base_asset, quote_asset = market
-    quote_asset_in_pln = get_price((quote_asset, "PLN"), date)
+    quote_asset_in_pln = get_price((quote_asset, "PLN"))
     base_asset_in_pln = price * quote_asset_in_pln
     return {
         base_asset: base_asset_in_pln,
@@ -161,7 +165,7 @@ BINANCE_QUOTE_ASSETS: Final = (
 )
 
 
-def identify_binance_market_assets(market: str) -> tuple[Ticker, Ticker]:
+def identify_binance_market_assets(market: str) -> Market:
     for quote_asset in BINANCE_QUOTE_ASSETS:
         if market.endswith(quote_asset):
             return (market.removesuffix(quote_asset), quote_asset)
