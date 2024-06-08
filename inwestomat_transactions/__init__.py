@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import csv
 import dataclasses
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import enum
 from decimal import Decimal
+import io
 from typing import Callable, Final, Iterator, TypeAlias
 
 import binance
@@ -17,6 +19,11 @@ Market: TypeAlias = tuple[Ticker, Ticker]
 class TxType(enum.Enum):
     BUY = "BUY"
     SELL = "SELL"
+
+    def to_pl(self) -> str:
+        match self:
+            case TxType.BUY: return "Zakup"
+            case TxType.SELL: return "Sprzedaż"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -170,3 +177,50 @@ def identify_binance_market_assets(market: str) -> Market:
         if market.endswith(quote_asset):
             return (market.removesuffix(quote_asset), quote_asset)
     raise NotImplementedError("Unkown quote asset")
+
+
+TIMEZONE: Final = timezone(timedelta(hours=2))
+
+
+def write_inwestomat_transactions(file: io.TextIOBase, txs: list[InwestomatTx]) -> None:
+
+    writer = csv.writer(file, delimiter=";")
+    for tx in txs:
+        writer.writerow([
+            # Konto
+            "",
+            # Data
+            tx.date.astimezone(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S"),
+            # Ticker
+            tx.ticker,
+            # Waluta
+            "",
+            # Nazwa
+            "",
+            # Klasa aktywów
+            "",
+            # Rodzaj transakcji
+            tx.type.to_pl(),
+            # Liczba
+            _format_number(tx.amount),
+            # Cena
+            _format_number(tx.price),
+            # Prowizje
+            _format_number(tx.fee),
+            # Kurs PLN transakcji
+            "",
+            # Cena nominalna
+            "",
+            # Total PLN
+            _format_number(tx.total_pln),
+            # Klucz
+            "",
+            # XIRR
+            "",
+            # Komantarz
+            "",
+        ])
+
+
+def _format_number(num: Decimal) -> str:
+    return format(num.normalize(), "f").replace(".", ",")

@@ -1,16 +1,18 @@
 from datetime import datetime
 from decimal import Decimal
+import io
 from unittest import mock
 
 from inwestomat_transactions import (
     BinanceTx,
-    split_binance_tx_to_inwestomat_txs,
     find_pln_prices,
     get_price,
     InwestomatTx,
     read_binance_transactions,
+    split_binance_tx_to_inwestomat_txs,
     Ticker,
     TxType,
+    write_inwestomat_transactions,
 )
 
 
@@ -164,5 +166,42 @@ class Test_read_binance_transactions:
         ]
 
         result = read_binance_transactions(file_path)
+
+        assert result == expected
+
+
+class Test_write_inwestomat_transactions:
+    def test_should_save_transactions_in_csv_format(self) -> None:
+        txs = [
+            InwestomatTx(
+                date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
+                ticker="BTC",
+                type=TxType.SELL,
+                amount=Decimal("0.00024205"),
+                price=Decimal("255380.00000000"),
+                total_pln=Decimal("61.8147290000000000"),
+                fee=Decimal("0")
+            ),
+            InwestomatTx(
+                date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
+                ticker="ETH",
+                type=TxType.BUY,
+                amount=Decimal("0.004995"),
+                price=Decimal("12362.9458000000000"),
+                total_pln=Decimal("61.8147290000000000"),
+                fee=Decimal("0.0618147290000000000"),
+            ),
+        ]
+
+        expected = (
+            ";2024-05-07 02:47:46;BTC;;;;Sprzedaż;"
+            "0,00024205;255380;0;;;61,814729;;;\n"
+            ";2024-05-07 02:47:46;ETH;;;;Zakup;"
+            "0,004995;12362,9458;0,061814729;;;61,814729;;;\n"
+        )
+
+        with io.StringIO(newline=None) as buffer:
+            write_inwestomat_transactions(buffer, txs)
+            result = buffer.getvalue()
 
         assert result == expected
