@@ -3,13 +3,34 @@ from __future__ import annotations
 import csv
 import dataclasses
 from datetime import datetime, timedelta, timezone
-import enum
 from decimal import Decimal
+import enum
 import io
-from typing import Callable, Final, Iterator, TypeAlias
+import sys
+from typing import Callable, Final, Iterator, Sequence, TypeAlias
 
 import binance
 import openpyxl
+
+
+def main(args: Sequence[str] | None = None) -> None:
+    if args is None:
+        args = sys.argv[1:]
+    input_path, output_path = args
+    convert_binance(input_path, output_path)
+
+
+def convert_binance(input_path: str, output_path: str) -> None:
+    binance_client = binance.Client()
+
+    binance_txs = read_binance_transactions(input_path)
+
+    inwestomat_txs = list[InwestomatTx]()
+    for tx in binance_txs:
+        inwestomat_txs.extend(convert_binance_tx(tx, binance_client))
+
+    with open(output_path, "w", newline="") as output_file:
+        write_inwestomat_transactions(output_file, inwestomat_txs)
 
 
 Ticker: TypeAlias = str
