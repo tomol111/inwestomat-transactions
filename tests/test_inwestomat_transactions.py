@@ -35,7 +35,7 @@ class Test_split_binance_tx_to_inwestomat_txs:
 
         assert first_tx == InwestomatTx(
             date=date,
-            ticker="BTC",
+            ticker="CURRENCY:BTCPLN",
             type=TxType.SELL,
             amount=Decimal("0.0001728"),
             price=Decimal("258118"),
@@ -44,7 +44,7 @@ class Test_split_binance_tx_to_inwestomat_txs:
         )
         assert second_tx == InwestomatTx(
             date=date,
-            ticker="ADA",
+            ticker="CURRENCY:ADAPLN",
             type=TxType.BUY,
             amount=Decimal("23.976"),
             price=Decimal("1.8584496"),
@@ -70,7 +70,7 @@ class Test_split_binance_tx_to_inwestomat_txs:
 
         assert first_tx == InwestomatTx(
             date=date,
-            ticker="ADA",
+            ticker="CURRENCY:ADAPLN",
             type=TxType.SELL,
             amount=Decimal("24"),
             price=Decimal("1.76500606"),
@@ -79,7 +79,7 @@ class Test_split_binance_tx_to_inwestomat_txs:
         )
         assert second_tx == InwestomatTx(
             date=date,
-            ticker="BTC",
+            ticker="CURRENCY:BTCPLN",
             type=TxType.BUY,
             amount=Decimal("0.0001815"),
             price=Decimal("233158"),
@@ -175,7 +175,7 @@ class Test_write_inwestomat_transactions:
         txs = [
             InwestomatTx(
                 date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
-                ticker="BTC",
+                ticker="CURRENCY:BTCPLN",
                 type=TxType.SELL,
                 amount=Decimal("0.00024205"),
                 price=Decimal("255380.00000000"),
@@ -184,7 +184,7 @@ class Test_write_inwestomat_transactions:
             ),
             InwestomatTx(
                 date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
-                ticker="ETH",
+                ticker="CURRENCY:ETHPLN",
                 type=TxType.BUY,
                 amount=Decimal("0.004995"),
                 price=Decimal("12362.9458000000000"),
@@ -194,9 +194,9 @@ class Test_write_inwestomat_transactions:
         ]
 
         expected = (
-            ";2024-05-07 02:47:46;BTC;;;;Sprzedaż;"
+            ";2024-05-07 02:47:46;CURRENCY:BTCPLN;;;;Sprzedaż;"
             "0,00024205;255380;0;;;61,814729;;;\n"
-            ";2024-05-07 02:47:46;ETH;;;;Zakup;"
+            ";2024-05-07 02:47:46;CURRENCY:ETHPLN;;;;Zakup;"
             "0,004995;12362,9458;0,061814729;;;61,814729;;;\n"
         )
 

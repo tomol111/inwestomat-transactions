@@ -106,7 +106,7 @@ def split_binance_tx_to_inwestomat_txs(
 
     sell_tx = InwestomatTx(
         date=btx.date,
-        ticker=sell_ticker,
+        ticker=format_cryptocurrency_ticker(sell_ticker),
         type=TxType.SELL,
         amount=sell_amount,
         price=sell_price,
@@ -115,7 +115,7 @@ def split_binance_tx_to_inwestomat_txs(
     )
     buy_tx = InwestomatTx(
         date=btx.date,
-        ticker=buy_ticker,
+        ticker=format_cryptocurrency_ticker(buy_ticker),
         type=TxType.BUY,
         amount=buy_amount,
         price=buy_price,
@@ -123,6 +123,10 @@ def split_binance_tx_to_inwestomat_txs(
         fee=buy_fee,
     )
     return [sell_tx, buy_tx]
+
+
+def format_cryptocurrency_ticker(ticker: Ticker) -> Ticker:
+    return f"CURRENCY:{ticker}PLN"
 
 
 class KLineValue(enum.Enum):
