@@ -1,10 +1,14 @@
+import argparse
 from datetime import datetime
 from decimal import Decimal
 import io
 from unittest import mock
 
+import pytest
+
 from inwestomat_transactions import (
     BinanceTx,
+    build_parser,
     find_pln_prices,
     get_price,
     InwestomatTx,
@@ -14,6 +18,44 @@ from inwestomat_transactions import (
     TxType,
     write_inwestomat_transactions,
 )
+
+
+class Test_parser:
+    parser: argparse.ArgumentParser
+
+    @classmethod
+    def setup_class(cls) -> None:
+        cls.parser = build_parser()
+
+    def test_should_parse_input_and_output_paths(self) -> None:
+        args = self.parser.parse_args("in.xlsx out.csv".split())
+
+        assert args.input_path == "in.xlsx"
+        assert args.output_path == "out.csv"
+
+    def test_should_parse_only_input_path(self) -> None:
+        args = self.parser.parse_args("in.xlsx".split())
+
+        assert args.input_path == "in.xlsx"
+        assert args.output_path is None
+
+    def test_should_require_input_path(self, capsys: pytest.CaptureFixture[str]) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            self.parser.parse_args([])
+
+        assert exc_info.value.args == (2,)
+        error_msg = "error: the following arguments are required: input_path"
+        assert error_msg in capsys.readouterr().err
+
+    def test_should_complain_about_unknown_arguments(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            self.parser.parse_args("in.xlsx out.csv additional".split())
+
+        assert exc_info.value.args == (2,)
+        error_msg = "error: unrecognized arguments: additional"
+        assert error_msg in capsys.readouterr().err
 
 
 class Test_split_binance_tx_to_inwestomat_txs:

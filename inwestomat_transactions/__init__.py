@@ -1,26 +1,32 @@
 from __future__ import annotations
 
+import argparse
 import csv
 import dataclasses
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import enum
-import io
 import sys
-from typing import Callable, Final, Iterator, Sequence, TypeAlias
+from typing import Callable, Final, Iterator, Sequence, TextIO, TypeAlias
 
 import binance
 import openpyxl
 
 
-def main(args: Sequence[str] | None = None) -> None:
-    if args is None:
-        args = sys.argv[1:]
-    input_path, output_path = args
-    convert_binance(input_path, output_path)
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    convert_binance(args.input_path, args.output_path)
 
 
-def convert_binance(input_path: str, output_path: str) -> None:
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="inwestomat")
+    parser.add_argument("input_path")
+    parser.add_argument("output_path", nargs="?")
+    return parser
+
+
+def convert_binance(input_path: str, output_path: str | None) -> None:
     binance_client = binance.Client()
 
     binance_txs = read_binance_transactions(input_path)
@@ -29,8 +35,11 @@ def convert_binance(input_path: str, output_path: str) -> None:
     for tx in binance_txs:
         inwestomat_txs.extend(convert_binance_tx(tx, binance_client))
 
-    with open(output_path, "w", newline="") as output_file:
-        write_inwestomat_transactions(output_file, inwestomat_txs)
+    if output_path is None:
+        write_inwestomat_transactions(sys.stdout, inwestomat_txs)
+    else:
+        with open(output_path, "w", newline="") as output_file:
+            write_inwestomat_transactions(output_file, inwestomat_txs)
 
 
 Ticker: TypeAlias = str
@@ -207,7 +216,7 @@ def identify_binance_market_assets(market: str) -> Market:
 TIMEZONE: Final = timezone(timedelta(hours=2))
 
 
-def write_inwestomat_transactions(file: io.TextIOBase, txs: list[InwestomatTx]) -> None:
+def write_inwestomat_transactions(file: TextIO, txs: list[InwestomatTx]) -> None:
 
     writer = csv.writer(file, delimiter=";")
     for tx in txs:
