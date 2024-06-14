@@ -207,7 +207,7 @@ class Test_read_binance_transactions:
             ),
         ]
 
-        result = read_binance_transactions(file_path)
+        result = list(read_binance_transactions(file_path))
 
         assert result == expected
 

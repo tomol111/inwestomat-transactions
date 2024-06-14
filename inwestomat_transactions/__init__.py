@@ -8,7 +8,7 @@ from decimal import Decimal
 import enum
 import itertools
 import sys
-from typing import Callable, Final, Iterator, Sequence, TextIO, TypeAlias
+from typing import Callable, Final, Iterable, Iterator, Sequence, TextIO, TypeAlias
 
 import binance
 import openpyxl
@@ -32,9 +32,10 @@ def convert_binance(input_path: str, output_path: str | None) -> None:
 
     binance_txs = read_binance_transactions(input_path)
 
-    inwestomat_txs = list[InwestomatTx]()
-    for tx in binance_txs:
-        inwestomat_txs.extend(convert_binance_tx(tx, binance_client))
+    inwestomat_txs = itertools.chain.from_iterable(
+        convert_binance_tx(tx, binance_client)
+        for tx in binance_txs
+    )
 
     if output_path is None:
         write_inwestomat_transactions(sys.stdout, inwestomat_txs)
@@ -178,7 +179,7 @@ def find_pln_prices(
     }
 
 
-def read_binance_transactions(file_path: str) -> list[BinanceTx]:
+def read_binance_transactions(file_path: str) -> Iterator[BinanceTx]:
     worksheet = openpyxl.load_workbook(file_path, read_only=True).active
 
     max_col = 8
@@ -187,11 +188,10 @@ def read_binance_transactions(file_path: str) -> list[BinanceTx]:
         for row in itertools.count(2)
     )
 
-    result = list[BinanceTx]()
     for date, market, typ, price, amount, total, fee, fee_coin in rows:
         if date is None:
             break
-        result.append(BinanceTx(
+        yield BinanceTx(
             date=datetime.fromisoformat(date).replace(tzinfo=timezone.utc),
             market=identify_binance_market_assets(market),
             type=TxType(typ),
@@ -200,9 +200,7 @@ def read_binance_transactions(file_path: str) -> list[BinanceTx]:
             total=Decimal(total),
             fee=Decimal(fee),
             fee_coin=fee_coin,
-        ))
-
-    return result
+        )
 
 
 BINANCE_QUOTE_ASSETS: Final = (
@@ -221,7 +219,7 @@ def identify_binance_market_assets(market: str) -> Market:
 TIMEZONE: Final = timezone(timedelta(hours=2))
 
 
-def write_inwestomat_transactions(file: TextIO, txs: list[InwestomatTx]) -> None:
+def write_inwestomat_transactions(file: TextIO, txs: Iterable[InwestomatTx]) -> None:
 
     writer = csv.writer(file, delimiter=";")
     for tx in txs:
