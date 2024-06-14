@@ -6,6 +6,7 @@ import dataclasses
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import enum
+import itertools
 import sys
 from typing import Callable, Final, Iterator, Sequence, TextIO, TypeAlias
 
@@ -178,12 +179,16 @@ def find_pln_prices(
 
 
 def read_binance_transactions(file_path: str) -> list[BinanceTx]:
-    data: Iterator = openpyxl.load_workbook(file_path, read_only=True).active.values
+    worksheet = openpyxl.load_workbook(file_path, read_only=True).active
 
-    next(data)  # usuń nagłówek z nazwami
+    max_col = 8
+    rows = (
+        [worksheet.cell(row, column).value for column in range(1, max_col+1)]
+        for row in itertools.count(2)
+    )
 
     result = list[BinanceTx]()
-    for date, market, typ, price, amount, total, fee, fee_coin in data:
+    for date, market, typ, price, amount, total, fee, fee_coin in rows:
         if date is None:
             break
         result.append(BinanceTx(
