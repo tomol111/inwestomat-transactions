@@ -58,6 +58,14 @@ class TxType(enum.Enum):
             case TxType.SELL: return "Sprzedaż"
 
 
+class Currency(enum.Enum):
+    PLN = "PLN"
+    USD = "USD"
+    EUR = "EUR"
+    GBP = "GBP"
+    CHF = "CHF"
+
+
 @dataclasses.dataclass(frozen=True)
 class BinanceTx:
     date: datetime
@@ -74,9 +82,12 @@ class BinanceTx:
 class InwestomatTx:
     date: datetime
     ticker: Ticker
+    currency: Currency
     type: TxType
     amount: Decimal
     price: Decimal
+    pln_rate: Decimal
+    nominal_price: Decimal
     total_pln: Decimal
     fee: Decimal
 
@@ -118,18 +129,24 @@ def split_binance_tx_to_inwestomat_txs(
     sell_tx = InwestomatTx(
         date=btx.date,
         ticker=format_cryptocurrency_ticker(sell_ticker),
+        currency=Currency.PLN,
         type=TxType.SELL,
         amount=sell_amount,
         price=sell_price,
+        pln_rate=Decimal(1),
+        nominal_price=Decimal(1),
         total_pln=sell_total_pln,
         fee=sell_fee,
     )
     buy_tx = InwestomatTx(
         date=btx.date,
         ticker=format_cryptocurrency_ticker(buy_ticker),
+        currency=Currency.PLN,
         type=TxType.BUY,
         amount=buy_amount,
         price=buy_price,
+        pln_rate=Decimal(1),
+        nominal_price=Decimal(1),
         total_pln=buy_total_pln,
         fee=buy_fee,
     )
@@ -231,7 +248,7 @@ def write_inwestomat_transactions(file: TextIO, txs: Iterable[InwestomatTx]) -> 
             # Ticker
             tx.ticker,
             # Waluta
-            "",
+            tx.currency.value,
             # Nazwa
             "",
             # Klasa aktywów
@@ -245,9 +262,9 @@ def write_inwestomat_transactions(file: TextIO, txs: Iterable[InwestomatTx]) -> 
             # Prowizje
             _format_number(tx.fee),
             # Kurs PLN transakcji
-            "",
+            _format_number(tx.pln_rate),
             # Cena nominalna
-            "",
+            _format_number(tx.nominal_price),
             # Total PLN
             _format_number(tx.total_pln),
             # Klucz

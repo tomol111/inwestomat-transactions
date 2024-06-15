@@ -9,6 +9,7 @@ import pytest
 from inwestomat_transactions import (
     BinanceTx,
     build_parser,
+    Currency,
     find_pln_prices,
     get_price,
     InwestomatTx,
@@ -78,18 +79,24 @@ class Test_split_binance_tx_to_inwestomat_txs:
         assert first_tx == InwestomatTx(
             date=date,
             ticker="CURRENCY:BTCPLN",
+            currency=Currency.PLN,
             type=TxType.SELL,
             amount=Decimal("0.0001728"),
             price=Decimal("258118"),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
             total_pln=Decimal("44.6027904"),
             fee=Decimal(0),
         )
         assert second_tx == InwestomatTx(
             date=date,
             ticker="CURRENCY:ADAPLN",
+            currency=Currency.PLN,
             type=TxType.BUY,
             amount=Decimal("23.976"),
             price=Decimal("1.8584496"),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
             total_pln=Decimal("44.6027904"),
             fee=Decimal("0.0446027904"),
         )
@@ -113,18 +120,24 @@ class Test_split_binance_tx_to_inwestomat_txs:
         assert first_tx == InwestomatTx(
             date=date,
             ticker="CURRENCY:ADAPLN",
+            currency=Currency.PLN,
             type=TxType.SELL,
             amount=Decimal("24"),
             price=Decimal("1.76500606"),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
             total_pln=Decimal("42.36014544"),
             fee=Decimal(0),
         )
         assert second_tx == InwestomatTx(
             date=date,
             ticker="CURRENCY:BTCPLN",
+            currency=Currency.PLN,
             type=TxType.BUY,
             amount=Decimal("0.0001815"),
             price=Decimal("233158"),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
             total_pln=Decimal("42.36014544"),
             fee=Decimal("0.04196844"),
         )
@@ -218,28 +231,34 @@ class Test_write_inwestomat_transactions:
             InwestomatTx(
                 date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
                 ticker="CURRENCY:BTCPLN",
+                currency=Currency.PLN,
                 type=TxType.SELL,
                 amount=Decimal("0.00024205"),
                 price=Decimal("255380.00000000"),
+                pln_rate=Decimal(1),
+                nominal_price=Decimal(1),
                 total_pln=Decimal("61.8147290000000000"),
                 fee=Decimal("0")
             ),
             InwestomatTx(
                 date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
                 ticker="CURRENCY:ETHPLN",
+                currency=Currency.PLN,
                 type=TxType.BUY,
                 amount=Decimal("0.004995"),
                 price=Decimal("12362.9458000000000"),
+                pln_rate=Decimal(1),
+                nominal_price=Decimal(1),
                 total_pln=Decimal("61.8147290000000000"),
                 fee=Decimal("0.0618147290000000000"),
             ),
         ]
 
         expected = (
-            ";2024-05-07 02:47:46;CURRENCY:BTCPLN;;;;Sprzedaż;"
-            "0,00024205;255380;0;;;61,814729;;;\n"
-            ";2024-05-07 02:47:46;CURRENCY:ETHPLN;;;;Zakup;"
-            "0,004995;12362,9458;0,061814729;;;61,814729;;;\n"
+            ";2024-05-07 02:47:46;CURRENCY:BTCPLN;PLN;;;Sprzedaż;"
+            "0,00024205;255380;0;1;1;61,814729;;;\n"
+            ";2024-05-07 02:47:46;CURRENCY:ETHPLN;PLN;;;Zakup;"
+            "0,004995;12362,9458;0,061814729;1;1;61,814729;;;\n"
         )
 
         with io.StringIO(newline=None) as buffer:
