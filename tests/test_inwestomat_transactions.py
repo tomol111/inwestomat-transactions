@@ -234,8 +234,8 @@ class Test_read_xtb_transactions:
                 "ID;Type;Time;Symbol;Comment;Amount\n"
                 "541449014;Sprzedaż akcji/ETF;02.05.2024 13:03:22;CDR.PL;"
                 "CLOSE BUY 1 @ 122.30;122.3\n"
-                "535040170;Zakup akcji/ETF;19.04.2024 16:36:01;DEL.PL;"
-                "OPEN BUY 13 @ 9.94;-129.22\n"
+                "515820417;Zakup akcji/ETF;14.03.2024 15:55:43;DEK.PL;"
+                "OPEN BUY 3/4 @ 50.60;-151.8\n"
             ),
             newline=None,
         )
@@ -250,13 +250,13 @@ class Test_read_xtb_transactions:
                 currency_amount=Decimal("122.3"),
             ),
             XtbTx(
-                id="535040170",
+                id="515820417",
                 type=TxType.BUY,
-                time=datetime.fromisoformat("2024-04-19 16:36:01+02:00"),
-                symbol="DEL.PL",
-                asset_amount=Decimal("13"),
-                price=Decimal("9.94"),
-                currency_amount=Decimal("-129.22"),
+                time=datetime.fromisoformat("2024-03-14 15:55:43+02:00"),
+                symbol="DEK.PL",
+                asset_amount=Decimal("3"),
+                price=Decimal("50.60"),
+                currency_amount=Decimal("-151.8"),
             ),
         ]
 

@@ -249,6 +249,7 @@ XTB_BUY_SELL_COMMENT_REGEX: Final = re.compile(
     r"""
     (?:OPEN|CLOSE)\ BUY\             # przedrostek
     (?P<asset_amount>\d+(?:\.\d+)?)  # liczba jednostek
+    (?:/(?:\d+(?:\.\d+)?))?          # całkowita zlecona liczba jednostek
     \ @\                             # separator
     (?P<price>\d+(?:\.\d+)?)         # cena
     """,
@@ -267,7 +268,7 @@ def read_xtb_transactions(file: TextIO) -> Iterator[XtbTx]:
                 raise NotImplementedError(f"Nieznany typ transakcji: {row['Type']}")
 
         comment_match = re.fullmatch(XTB_BUY_SELL_COMMENT_REGEX, row["Comment"])
-        assert comment_match
+        assert comment_match, "Komentarz nie został rozpoznany"
 
         yield XtbTx(
             id=row["ID"],
