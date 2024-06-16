@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import enum
 import itertools
+import re
 import sys
 from typing import Callable, Final, Iterable, Iterator, Sequence, TextIO, TypeAlias
 
@@ -76,6 +77,17 @@ class BinanceTx:
     total: Decimal
     fee: Decimal
     fee_coin: Ticker
+
+
+@dataclasses.dataclass(frozen=True)
+class XtbTx:
+    id: str
+    type: TxType
+    time: datetime
+    symbol: Ticker
+    asset_amount: Decimal
+    price: Decimal
+    currency_amount: Decimal
 
 
 @dataclasses.dataclass(frozen=True)
@@ -231,6 +243,42 @@ def identify_binance_market_assets(market: str) -> Market:
         if market.endswith(quote_asset):
             return (market.removesuffix(quote_asset), quote_asset)
     raise NotImplementedError("Unkown quote asset")
+
+
+XTB_BUY_SELL_COMMENT_REGEX: Final = re.compile(
+    r"""
+    (?:OPEN|CLOSE)\ BUY\             # przedrostek
+    (?P<asset_amount>\d+(?:\.\d+)?)  # liczba jednostek
+    \ @\                             # separator
+    (?P<price>\d+(?:\.\d+)?)         # cena
+    """,
+    re.VERBOSE,
+)
+
+
+def read_xtb_transactions(file: TextIO) -> Iterator[XtbTx]:
+    for row in csv.DictReader(file, delimiter=";"):
+        match row["Type"]:
+            case "Sprzedaż akcji/ETF":
+                type_ = TxType.SELL
+            case "Zakup akcji/ETF":
+                type_ = TxType.BUY
+            case _:
+                raise NotImplementedError(f"Nieznany typ transakcji: {row['Type']}")
+
+        comment_match = re.fullmatch(XTB_BUY_SELL_COMMENT_REGEX, row["Comment"])
+        assert comment_match
+
+        yield XtbTx(
+            id=row["ID"],
+            type=type_,
+            time=datetime.strptime(row["Time"], "%d.%m.%Y %H:%M:%S")
+            .replace(tzinfo=TIMEZONE),
+            symbol=row["Symbol"],
+            asset_amount=Decimal(comment_match.group("asset_amount")),
+            price=Decimal(comment_match.group("price")),
+            currency_amount=Decimal(row["Amount"]),
+        )
 
 
 TIMEZONE: Final = timezone(timedelta(hours=2))

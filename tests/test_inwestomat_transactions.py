@@ -14,10 +14,12 @@ from inwestomat_transactions import (
     get_price,
     InwestomatTx,
     read_binance_transactions,
+    read_xtb_transactions,
     split_binance_tx_to_inwestomat_txs,
     Ticker,
     TxType,
     write_inwestomat_transactions,
+    XtbTx,
 )
 
 
@@ -221,6 +223,44 @@ class Test_read_binance_transactions:
         ]
 
         result = list(read_binance_transactions(file_path))
+
+        assert result == expected
+
+
+class Test_read_xtb_transactions:
+    def test_should_load_transactions_from_file(self) -> None:
+        file = io.StringIO(
+            (
+                "ID;Type;Time;Symbol;Comment;Amount\n"
+                "541449014;Sprzedaż akcji/ETF;02.05.2024 13:03:22;CDR.PL;"
+                "CLOSE BUY 1 @ 122.30;122.3\n"
+                "535040170;Zakup akcji/ETF;19.04.2024 16:36:01;DEL.PL;"
+                "OPEN BUY 13 @ 9.94;-129.22\n"
+            ),
+            newline=None,
+        )
+        expected = [
+            XtbTx(
+                id="541449014",
+                type=TxType.SELL,
+                time=datetime.fromisoformat("2024-05-02 13:03:22+02:00"),
+                symbol="CDR.PL",
+                asset_amount=Decimal("1"),
+                price=Decimal("122.30"),
+                currency_amount=Decimal("122.3"),
+            ),
+            XtbTx(
+                id="535040170",
+                type=TxType.BUY,
+                time=datetime.fromisoformat("2024-04-19 16:36:01+02:00"),
+                symbol="DEL.PL",
+                asset_amount=Decimal("13"),
+                price=Decimal("9.94"),
+                currency_amount=Decimal("-129.22"),
+            ),
+        ]
+
+        result = list(read_xtb_transactions(file))
 
         assert result == expected
 
