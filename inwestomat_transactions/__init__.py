@@ -20,9 +20,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
     match Exchange(args.exchange):
         case Exchange.BINANCE:
-            convert_binance(args.input_path, args.output_path)
+            convert_binance(args.input_path, sys.stdout)
         case Exchange.XTB:
-            convert_xtb(args.input_path, args.output_path)
+            with open(args.input_path, "r", newline="") as input_file:
+                convert_xtb(input_file, sys.stdout)
         case _:
             raise NotImplementedError(args.exchange)
 
@@ -34,7 +35,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Giałda, kórej transakcje mają być przekonwertowane."
     )
     parser.add_argument("input_path", help="Ściażka do pliku wejściowego.")
-    parser.add_argument("output_path", nargs="?", help="Ścieżka do pliku wyjściowego.")
     return parser
 
 
@@ -103,7 +103,7 @@ class InwestomatTx:
     comment: str = ""
 
 
-def convert_binance(input_path: str, output_path: str | None) -> None:
+def convert_binance(input_path: str, output_file: TextIO) -> None:
     binance_client = binance.Client()
 
     binance_txs = read_binance_transactions(input_path)
@@ -113,11 +113,7 @@ def convert_binance(input_path: str, output_path: str | None) -> None:
         for tx in binance_txs
     )
 
-    if output_path is None:
-        write_inwestomat_transactions(sys.stdout, inwestomat_txs)
-    else:
-        with open(output_path, "w", newline="") as output_file:
-            write_inwestomat_transactions(output_file, inwestomat_txs)
+    write_inwestomat_transactions(output_file, inwestomat_txs)
 
 
 def convert_binance_tx(btx: BinanceTx, client: binance.Client) -> list[InwestomatTx]:
@@ -261,20 +257,15 @@ def identify_binance_market_assets(market: str) -> Market:
     raise NotImplementedError("Unkown quote asset")
 
 
-def convert_xtb(input_path: str, output_path: str | None) -> None:
-    with open(input_path, "r", newline="") as input_file:
-        xtb_txs = read_xtb_transactions(input_file)
+def convert_xtb(input_file: TextIO, output_file: TextIO) -> None:
+    xtb_txs = read_xtb_transactions(input_file)
 
-        inwestomat_txs = itertools.chain.from_iterable(
-            convert_xtb_tx(tx)
-            for tx in xtb_txs
-        )
+    inwestomat_txs = itertools.chain.from_iterable(
+        convert_xtb_tx(tx)
+        for tx in xtb_txs
+    )
 
-        if output_path is None:
-            write_inwestomat_transactions(sys.stdout, inwestomat_txs)
-        else:
-            with open(output_path, "w", newline="") as output_file:
-                write_inwestomat_transactions(output_file, inwestomat_txs)
+    write_inwestomat_transactions(output_file, inwestomat_txs)
 
 
 def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:

@@ -32,18 +32,10 @@ class Test_parser:
         cls.parser = build_parser()
 
     def test_should_parse_all_positional_arguments(self) -> None:
-        args = self.parser.parse_args("binance in.xlsx out.csv".split())
-
-        assert args.exchange == "binance"
-        assert args.input_path == "in.xlsx"
-        assert args.output_path == "out.csv"
-
-    def test_should_make_output_path_optional(self) -> None:
         args = self.parser.parse_args("binance in.xlsx".split())
 
         assert args.exchange == "binance"
         assert args.input_path == "in.xlsx"
-        assert args.output_path is None
 
     def test_should_require_obligatory_arguments(
         self, capsys: pytest.CaptureFixture[str]
@@ -59,7 +51,7 @@ class Test_parser:
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         with pytest.raises(SystemExit) as exc_info:
-            self.parser.parse_args("binance in.xlsx out.csv additional".split())
+            self.parser.parse_args("binance in.xlsx additional".split())
 
         assert exc_info.value.args == (2,)
         error_msg = "error: unrecognized arguments: additional"
