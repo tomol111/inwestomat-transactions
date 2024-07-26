@@ -9,6 +9,7 @@ import pytest
 from inwestomat_transactions import (
     BinanceTx,
     build_parser,
+    convert_xtb_tx,
     Currency,
     find_pln_prices,
     get_price,
@@ -227,6 +228,60 @@ class Test_read_binance_transactions:
         assert result == expected
 
 
+class Test_convert_xtb_tx:
+    def test_should_convert_pln_buy_transaction(self) -> None:
+        tx = XtbTx(
+            id="515820417",
+            type=TxType.BUY,
+            time=datetime.fromisoformat("2024-03-14 15:55:43+02:00"),
+            symbol="DEK.PL",
+            asset_amount=Decimal("3"),
+            price=Decimal("50.60"),
+            currency_amount=Decimal("-151.8"),
+        )
+        expected = [InwestomatTx(
+            date=datetime.fromisoformat("2024-03-14 15:55:43+02:00"),
+            ticker="WSE:DEK",
+            currency=Currency.PLN,
+            type=TxType.BUY,
+            amount=Decimal("3"),
+            price=Decimal("50.60"),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
+            total_pln=Decimal("151.8"),
+            fee=Decimal("0"),
+            comment="ID:515820417",
+        )]
+        result = convert_xtb_tx(tx)
+        assert result == expected
+
+    def test_should_convert_pln_sell_transaction(self) -> None:
+        tx = XtbTx(
+            id="541449014",
+            type=TxType.SELL,
+            time=datetime.fromisoformat("2024-05-02 13:03:22+02:00"),
+            symbol="CDR.PL",
+            asset_amount=Decimal("1"),
+            price=Decimal("122.30"),
+            currency_amount=Decimal("122.3"),
+        )
+        expected = [InwestomatTx(
+            date=datetime.fromisoformat("2024-05-02 13:03:22+02:00"),
+            ticker="WSE:CDR",
+            currency=Currency.PLN,
+            type=TxType.SELL,
+            amount=Decimal("1"),
+            price=Decimal("122.30"),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
+            total_pln=Decimal("122.3"),
+            fee=Decimal("0"),
+            comment="ID:541449014",
+        )]
+        result = convert_xtb_tx(tx)
+        assert result == expected
+
+
 class Test_read_xtb_transactions:
     def test_should_load_transactions_from_file(self) -> None:
         file = io.StringIO(
@@ -278,7 +333,7 @@ class Test_write_inwestomat_transactions:
                 pln_rate=Decimal(1),
                 nominal_price=Decimal(1),
                 total_pln=Decimal("61.8147290000000000"),
-                fee=Decimal("0")
+                fee=Decimal("0"),
             ),
             InwestomatTx(
                 date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),

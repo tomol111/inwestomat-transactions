@@ -28,23 +28,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def convert_binance(input_path: str, output_path: str | None) -> None:
-    binance_client = binance.Client()
-
-    binance_txs = read_binance_transactions(input_path)
-
-    inwestomat_txs = itertools.chain.from_iterable(
-        convert_binance_tx(tx, binance_client)
-        for tx in binance_txs
-    )
-
-    if output_path is None:
-        write_inwestomat_transactions(sys.stdout, inwestomat_txs)
-    else:
-        with open(output_path, "w", newline="") as output_file:
-            write_inwestomat_transactions(output_file, inwestomat_txs)
-
-
 Ticker: TypeAlias = str
 Market: TypeAlias = tuple[Ticker, Ticker]
 
@@ -102,6 +85,24 @@ class InwestomatTx:
     nominal_price: Decimal
     total_pln: Decimal
     fee: Decimal
+    comment: str = ""
+
+
+def convert_binance(input_path: str, output_path: str | None) -> None:
+    binance_client = binance.Client()
+
+    binance_txs = read_binance_transactions(input_path)
+
+    inwestomat_txs = itertools.chain.from_iterable(
+        convert_binance_tx(tx, binance_client)
+        for tx in binance_txs
+    )
+
+    if output_path is None:
+        write_inwestomat_transactions(sys.stdout, inwestomat_txs)
+    else:
+        with open(output_path, "w", newline="") as output_file:
+            write_inwestomat_transactions(output_file, inwestomat_txs)
 
 
 def convert_binance_tx(btx: BinanceTx, client: binance.Client) -> list[InwestomatTx]:
@@ -245,6 +246,43 @@ def identify_binance_market_assets(market: str) -> Market:
     raise NotImplementedError("Unkown quote asset")
 
 
+def convert_xtb(input_path: str, output_path: str | None) -> None:
+    with open(input_path, "r", newline="") as input_file:
+        xtb_txs = read_xtb_transactions(input_file)
+
+    inwestomat_txs = itertools.chain.from_iterable(
+        convert_xtb_tx(tx)
+        for tx in xtb_txs
+    )
+
+    if output_path is None:
+        write_inwestomat_transactions(sys.stdout, inwestomat_txs)
+    else:
+        with open(output_path, "w", newline="") as output_file:
+            write_inwestomat_transactions(output_file, inwestomat_txs)
+
+
+def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
+    inwestomat_tx = InwestomatTx(
+        date=tx.time,
+        ticker=convert_xtb_ticker(tx.symbol),
+        currency=Currency.PLN,
+        type=tx.type,
+        amount=tx.asset_amount,
+        price=tx.price,
+        pln_rate=Decimal(1),
+        nominal_price=Decimal(1),
+        total_pln=abs(tx.currency_amount),
+        fee=Decimal("0"),
+        comment=f"ID:{tx.id}",
+    )
+    return [inwestomat_tx]
+
+
+def convert_xtb_ticker(ticker: Ticker) -> Ticker:
+    return "WSE:" + ticker.removesuffix(".PL")
+
+
 XTB_BUY_SELL_COMMENT_REGEX: Final = re.compile(
     r"""
     (?:OPEN|CLOSE)\ BUY\             # przedrostek
@@ -321,7 +359,7 @@ def write_inwestomat_transactions(file: TextIO, txs: Iterable[InwestomatTx]) -> 
             # XIRR
             "",
             # Komantarz
-            "",
+            tx.comment,
         ])
 
 
