@@ -31,35 +31,44 @@ class Test_parser:
     def setup_class(cls) -> None:
         cls.parser = build_parser()
 
-    def test_should_parse_input_and_output_paths(self) -> None:
-        args = self.parser.parse_args("in.xlsx out.csv".split())
+    def test_should_parse_all_positional_arguments(self) -> None:
+        args = self.parser.parse_args("binance in.xlsx out.csv".split())
 
+        assert args.exchange == "binance"
         assert args.input_path == "in.xlsx"
         assert args.output_path == "out.csv"
 
-    def test_should_parse_only_input_path(self) -> None:
-        args = self.parser.parse_args("in.xlsx".split())
+    def test_should_make_output_path_optional(self) -> None:
+        args = self.parser.parse_args("binance in.xlsx".split())
 
+        assert args.exchange == "binance"
         assert args.input_path == "in.xlsx"
         assert args.output_path is None
 
-    def test_should_require_input_path(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_should_require_obligatory_arguments(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         with pytest.raises(SystemExit) as exc_info:
             self.parser.parse_args([])
 
         assert exc_info.value.args == (2,)
-        error_msg = "error: the following arguments are required: input_path"
+        error_msg = "error: the following arguments are required: exchange, input_path"
         assert error_msg in capsys.readouterr().err
 
     def test_should_complain_about_unknown_arguments(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         with pytest.raises(SystemExit) as exc_info:
-            self.parser.parse_args("in.xlsx out.csv additional".split())
+            self.parser.parse_args("binance in.xlsx out.csv additional".split())
 
         assert exc_info.value.args == (2,)
         error_msg = "error: unrecognized arguments: additional"
         assert error_msg in capsys.readouterr().err
+
+    def test_should_ignorecase_for_exchange(self) -> None:
+        args = self.parser.parse_args("BinANcE in.xlsx".split())
+
+        assert args.exchange == "binance"
 
 
 class Test_split_binance_tx_to_inwestomat_txs:

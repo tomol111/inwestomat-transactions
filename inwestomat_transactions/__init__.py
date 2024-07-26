@@ -18,14 +18,29 @@ import openpyxl
 def main(argv: Sequence[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
-    convert_binance(args.input_path, args.output_path)
+    match Exchange(args.exchange):
+        case Exchange.BINANCE:
+            convert_binance(args.input_path, args.output_path)
+        case Exchange.XTB:
+            convert_xtb(args.input_path, args.output_path)
+        case _:
+            raise NotImplementedError(args.exchange)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="inwestomat")
-    parser.add_argument("input_path")
-    parser.add_argument("output_path", nargs="?")
+    parser.add_argument(
+        "exchange", choices=[x.value for x in Exchange], type=str.lower,
+        help="Giałda, kórej transakcje mają być przekonwertowane."
+    )
+    parser.add_argument("input_path", help="Ściażka do pliku wejściowego.")
+    parser.add_argument("output_path", nargs="?", help="Ścieżka do pliku wyjściowego.")
     return parser
+
+
+class Exchange(enum.Enum):
+    BINANCE = "binance"
+    XTB = "xtb"
 
 
 Ticker: TypeAlias = str
@@ -250,16 +265,16 @@ def convert_xtb(input_path: str, output_path: str | None) -> None:
     with open(input_path, "r", newline="") as input_file:
         xtb_txs = read_xtb_transactions(input_file)
 
-    inwestomat_txs = itertools.chain.from_iterable(
-        convert_xtb_tx(tx)
-        for tx in xtb_txs
-    )
+        inwestomat_txs = itertools.chain.from_iterable(
+            convert_xtb_tx(tx)
+            for tx in xtb_txs
+        )
 
-    if output_path is None:
-        write_inwestomat_transactions(sys.stdout, inwestomat_txs)
-    else:
-        with open(output_path, "w", newline="") as output_file:
-            write_inwestomat_transactions(output_file, inwestomat_txs)
+        if output_path is None:
+            write_inwestomat_transactions(sys.stdout, inwestomat_txs)
+        else:
+            with open(output_path, "w", newline="") as output_file:
+                write_inwestomat_transactions(output_file, inwestomat_txs)
 
 
 def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
