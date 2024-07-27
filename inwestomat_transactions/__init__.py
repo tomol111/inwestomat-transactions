@@ -9,7 +9,16 @@ import enum
 import itertools
 import re
 import sys
-from typing import Callable, Final, Iterable, Iterator, Sequence, TextIO, TypeAlias
+from typing import (
+    cast,
+    Callable,
+    Final,
+    Iterable,
+    Iterator,
+    Literal,
+    Sequence,
+    TextIO,
+)
 
 import binance
 import openpyxl
@@ -32,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="inwestomat")
     parser.add_argument(
         "exchange", choices=[x.value for x in Exchange], type=str.lower,
-        help="Giałda, kórej transakcje mają być przekonwertowane."
+        help="Giełda, kórej transakcje mają być przekonwertowane."
     )
     parser.add_argument("input_path", help="Ściażka do pliku wejściowego.")
     return parser
@@ -43,18 +52,25 @@ class Exchange(enum.Enum):
     XTB = "xtb"
 
 
-Ticker: TypeAlias = str
-Market: TypeAlias = tuple[Ticker, Ticker]
+Ticker = str
+Market = tuple[Ticker, Ticker]
 
 
 class TxType(enum.Enum):
     BUY = "BUY"
     SELL = "SELL"
+    DEPOSIT = "DEPOSIT"
+    WITHDRAW = "WITHDRAW"
 
     def to_pl(self) -> str:
         match self:
             case TxType.BUY: return "Zakup"
             case TxType.SELL: return "Sprzedaż"
+            case TxType.DEPOSIT: return "Wpłata środków"
+            case TxType.WITHDRAW: return "Wypłata środków"
+
+    BuySell = Literal[BUY, SELL]
+    DepositWithdraw = Literal[DEPOSIT, WITHDRAW]
 
 
 class Currency(enum.Enum):
@@ -69,7 +85,7 @@ class Currency(enum.Enum):
 class BinanceTx:
     date: datetime
     market: Market
-    type: TxType
+    type: TxType.BuySell
     amount: Decimal
     price: Decimal
     total: Decimal
@@ -78,14 +94,25 @@ class BinanceTx:
 
 
 @dataclasses.dataclass(frozen=True)
-class XtbTx:
+class XtbBuySell:
     id: str
-    type: TxType
+    type: TxType.BuySell
     time: datetime
     symbol: Ticker
     asset_amount: Decimal
     price: Decimal
     currency_amount: Decimal
+
+
+@dataclasses.dataclass(frozen=True)
+class XtbDepositWithdraw:
+    id: str
+    type: TxType.DepositWithdraw
+    time: datetime
+    currency_amount: Decimal
+
+
+XtbTx = XtbBuySell | XtbDepositWithdraw
 
 
 @dataclasses.dataclass(frozen=True)
@@ -235,7 +262,7 @@ def read_binance_transactions(file_path: str) -> Iterator[BinanceTx]:
         yield BinanceTx(
             date=datetime.fromisoformat(date).replace(tzinfo=timezone.utc),
             market=identify_binance_market_assets(market),
-            type=TxType(typ),
+            type=cast(TxType.BuySell, TxType(typ)),
             price=Decimal(price),
             amount=Decimal(amount),
             total=Decimal(total),
@@ -269,19 +296,35 @@ def convert_xtb(input_file: TextIO, output_file: TextIO) -> None:
 
 
 def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
-    inwestomat_tx = InwestomatTx(
-        date=tx.time,
-        ticker=convert_xtb_ticker(tx.symbol),
-        currency=Currency.PLN,
-        type=tx.type,
-        amount=tx.asset_amount,
-        price=tx.price,
-        pln_rate=Decimal(1),
-        nominal_price=Decimal(1),
-        total_pln=abs(tx.currency_amount),
-        fee=Decimal("0"),
-        comment=f"ID:{tx.id}",
-    )
+    match tx:
+        case XtbBuySell():
+            inwestomat_tx = InwestomatTx(
+                date=tx.time,
+                ticker=convert_xtb_ticker(tx.symbol),
+                currency=Currency.PLN,
+                type=tx.type,
+                amount=tx.asset_amount,
+                price=tx.price,
+                pln_rate=Decimal(1),
+                nominal_price=Decimal(1),
+                total_pln=abs(tx.currency_amount),
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+        case XtbDepositWithdraw():
+            inwestomat_tx = InwestomatTx(
+                date=tx.time,
+                ticker="Gotówka",
+                currency=Currency.PLN,
+                type=tx.type,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=Decimal(1),
+                nominal_price=Decimal(1),
+                total_pln=abs(tx.currency_amount),
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
     return [inwestomat_tx]
 
 
@@ -302,28 +345,34 @@ XTB_BUY_SELL_COMMENT_REGEX: Final = re.compile(
 
 
 def read_xtb_transactions(file: TextIO) -> Iterator[XtbTx]:
+    row: dict[str, str]
     for row in csv.DictReader(file, delimiter=";"):
+        time = datetime.strptime(row["Time"], "%d.%m.%Y %H:%M:%S")\
+            .replace(tzinfo=TIMEZONE)
+        currency_amount = Decimal(row["Amount"])
+
         match row["Type"]:
-            case "Sprzedaż akcji/ETF":
-                type_ = TxType.SELL
-            case "Zakup akcji/ETF":
-                type_ = TxType.BUY
+            case "Sprzedaż akcji/ETF" | "Zakup akcji/ETF":
+                comment_match = re.fullmatch(XTB_BUY_SELL_COMMENT_REGEX, row["Comment"])
+                assert comment_match, "Komentarz nie został rozpoznany"
+                yield XtbBuySell(
+                    id=row["ID"],
+                    type=TxType.BUY if currency_amount < 0 else TxType.SELL,
+                    time=time,
+                    symbol=row["Symbol"],
+                    asset_amount=Decimal(comment_match.group("asset_amount")),
+                    price=Decimal(comment_match.group("price")),
+                    currency_amount=currency_amount,
+                )
+            case "Wpłata" | "Wypłata":
+                yield XtbDepositWithdraw(
+                    id=row["ID"],
+                    type=TxType.WITHDRAW if currency_amount < 0 else TxType.DEPOSIT,
+                    time=time,
+                    currency_amount=currency_amount,
+                )
             case _:
                 raise NotImplementedError(f"Nieznany typ transakcji: {row['Type']}")
-
-        comment_match = re.fullmatch(XTB_BUY_SELL_COMMENT_REGEX, row["Comment"])
-        assert comment_match, "Komentarz nie został rozpoznany"
-
-        yield XtbTx(
-            id=row["ID"],
-            type=type_,
-            time=datetime.strptime(row["Time"], "%d.%m.%Y %H:%M:%S")
-            .replace(tzinfo=TIMEZONE),
-            symbol=row["Symbol"],
-            asset_amount=Decimal(comment_match.group("asset_amount")),
-            price=Decimal(comment_match.group("price")),
-            currency_amount=Decimal(row["Amount"]),
-        )
 
 
 TIMEZONE: Final = timezone(timedelta(hours=2))

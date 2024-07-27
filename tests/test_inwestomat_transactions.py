@@ -20,7 +20,8 @@ from inwestomat_transactions import (
     Ticker,
     TxType,
     write_inwestomat_transactions,
-    XtbTx,
+    XtbBuySell,
+    XtbDepositWithdraw,
 )
 
 
@@ -231,7 +232,7 @@ class Test_read_binance_transactions:
 
 class Test_convert_xtb_tx:
     def test_should_convert_pln_buy_transaction(self) -> None:
-        tx = XtbTx(
+        tx = XtbBuySell(
             id="515820417",
             type=TxType.BUY,
             time=datetime.fromisoformat("2024-03-14 15:55:43+02:00"),
@@ -257,7 +258,7 @@ class Test_convert_xtb_tx:
         assert result == expected
 
     def test_should_convert_pln_sell_transaction(self) -> None:
-        tx = XtbTx(
+        tx = XtbBuySell(
             id="541449014",
             type=TxType.SELL,
             time=datetime.fromisoformat("2024-05-02 13:03:22+02:00"),
@@ -282,6 +283,29 @@ class Test_convert_xtb_tx:
         result = convert_xtb_tx(tx)
         assert result == expected
 
+    def test_should_convert_pln_deposit(self) -> None:
+        tx = XtbDepositWithdraw(
+            id="522216966",
+            type=TxType.DEPOSIT,
+            time=datetime.fromisoformat("2024-03-27 16:25:24+02:00"),
+            currency_amount=Decimal("2000"),
+        )
+        expected = [InwestomatTx(
+            date=datetime.fromisoformat("2024-03-27 16:25:24+02:00"),
+            ticker="Gotówka",
+            currency=Currency.PLN,
+            type=TxType.DEPOSIT,
+            amount=Decimal(1),
+            price=Decimal(1),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
+            total_pln=Decimal("2000"),
+            fee=Decimal(0),
+            comment="ID:522216966",
+        )]
+        result = convert_xtb_tx(tx)
+        assert result == expected
+
 
 class Test_read_xtb_transactions:
     def test_should_load_transactions_from_file(self) -> None:
@@ -292,11 +316,15 @@ class Test_read_xtb_transactions:
                 "CLOSE BUY 1 @ 122.30;122.3\n"
                 "515820417;Zakup akcji/ETF;14.03.2024 15:55:43;DEK.PL;"
                 "OPEN BUY 3/4 @ 50.60;-151.8\n"
+                "522216966;Wpłata;27.03.2024 16:25:24;;"
+                "Blik(Payu) deposit, PayU provider transaction "
+                "id=6M1GZQ8TG4240327GUEST000P01,"
+                "PayU merchant reference id=4418669, id=10832576;2000\n"
             ),
             newline=None,
         )
         expected = [
-            XtbTx(
+            XtbBuySell(
                 id="541449014",
                 type=TxType.SELL,
                 time=datetime.fromisoformat("2024-05-02 13:03:22+02:00"),
@@ -305,7 +333,7 @@ class Test_read_xtb_transactions:
                 price=Decimal("122.30"),
                 currency_amount=Decimal("122.3"),
             ),
-            XtbTx(
+            XtbBuySell(
                 id="515820417",
                 type=TxType.BUY,
                 time=datetime.fromisoformat("2024-03-14 15:55:43+02:00"),
@@ -313,6 +341,12 @@ class Test_read_xtb_transactions:
                 asset_amount=Decimal("3"),
                 price=Decimal("50.60"),
                 currency_amount=Decimal("-151.8"),
+            ),
+            XtbDepositWithdraw(
+                id="522216966",
+                type=TxType.DEPOSIT,
+                time=datetime.fromisoformat("2024-03-27 16:25:24+02:00"),
+                currency_amount=Decimal("2000"),
             ),
         ]
 
