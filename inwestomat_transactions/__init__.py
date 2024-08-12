@@ -61,6 +61,9 @@ class TxType(enum.Enum):
     SELL = "SELL"
     DEPOSIT = "DEPOSIT"
     WITHDRAW = "WITHDRAW"
+    DIVIDEND_INTEREST = "DIVIDEND_INTEREST"
+    COSTS = "COSTS"
+    SPLIT = "SPLIT"
 
     def to_pl(self) -> str:
         match self:
@@ -68,9 +71,13 @@ class TxType(enum.Enum):
             case TxType.SELL: return "Sprzedaż"
             case TxType.DEPOSIT: return "Wpłata środków"
             case TxType.WITHDRAW: return "Wypłata środków"
+            case TxType.DIVIDEND_INTEREST: return "Dywidenda / Odsetki"
+            case TxType.COSTS: return "Koszty"
+            case TxType.SPLIT: return "Split"
 
-    BuySell = Literal[BUY, SELL]
-    DepositWithdraw = Literal[DEPOSIT, WITHDRAW]
+
+BuyOrSell = Literal[TxType.BUY, TxType.SELL]
+DepositOrWithdraw = Literal[TxType.DEPOSIT, TxType.WITHDRAW]
 
 
 class Currency(enum.Enum):
@@ -80,12 +87,18 @@ class Currency(enum.Enum):
     GBP = "GBP"
     CHF = "CHF"
 
+    @property
+    def ticker(self) -> Ticker:
+        if self is Currency.PLN:
+            return "Gotówka"
+        return f"Waluty_{self.value}"
+
 
 @dataclasses.dataclass(frozen=True)
 class BinanceTx:
     date: datetime
     market: Market
-    type: TxType.BuySell
+    type: BuyOrSell
     amount: Decimal
     price: Decimal
     total: Decimal
@@ -96,7 +109,7 @@ class BinanceTx:
 @dataclasses.dataclass(frozen=True)
 class XtbBuySell:
     id: str
-    type: TxType.BuySell
+    type: BuyOrSell
     time: datetime
     symbol: Ticker
     asset_amount: Decimal
@@ -107,12 +120,28 @@ class XtbBuySell:
 @dataclasses.dataclass(frozen=True)
 class XtbDepositWithdraw:
     id: str
-    type: TxType.DepositWithdraw
+    type: DepositOrWithdraw
     time: datetime
     currency_amount: Decimal
 
 
-XtbTx = XtbBuySell | XtbDepositWithdraw
+@dataclasses.dataclass(frozen=True)
+class XtbDividendInterest:
+    id: str
+    time: datetime
+    symbol: Ticker
+    currency_amount: Decimal
+
+
+@dataclasses.dataclass(frozen=True)
+class XtbCosts:
+    id: str
+    time: datetime
+    symbol: Ticker
+    currency_amount: Decimal
+
+
+XtbTx = XtbBuySell | XtbDepositWithdraw | XtbDividendInterest | XtbCosts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -262,7 +291,7 @@ def read_binance_transactions(file_path: str) -> Iterator[BinanceTx]:
         yield BinanceTx(
             date=datetime.fromisoformat(date).replace(tzinfo=timezone.utc),
             market=identify_binance_market_assets(market),
-            type=cast(TxType.BuySell, TxType(typ)),
+            type=cast(BuyOrSell, TxType(typ)),
             price=Decimal(price),
             amount=Decimal(amount),
             total=Decimal(total),
@@ -314,7 +343,7 @@ def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
         case XtbDepositWithdraw():
             inwestomat_tx = InwestomatTx(
                 date=tx.time,
-                ticker="Gotówka",
+                ticker=Currency.PLN.ticker,
                 currency=Currency.PLN,
                 type=tx.type,
                 amount=Decimal(1),
@@ -325,6 +354,37 @@ def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
                 fee=Decimal(0),
                 comment=f"ID:{tx.id}",
             )
+        case XtbDividendInterest():
+            inwestomat_tx = InwestomatTx(
+                date=tx.time,
+                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else Currency.PLN.ticker,
+                currency=Currency.PLN,
+                type=TxType.DIVIDEND_INTEREST,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=Decimal(1),
+                nominal_price=Decimal(1),
+                total_pln=tx.currency_amount,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+        case XtbCosts():
+            inwestomat_tx = InwestomatTx(
+                date=tx.time,
+                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else Currency.PLN.ticker,
+                currency=Currency.PLN,
+                type=TxType.COSTS,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=Decimal(1),
+                nominal_price=Decimal(1),
+                total_pln=abs(tx.currency_amount),
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+        case unknown:
+            raise NotImplementedError(unknown)
+
     return [inwestomat_tx]
 
 
@@ -369,6 +429,20 @@ def read_xtb_transactions(file: TextIO) -> Iterator[XtbTx]:
                     id=row["ID"],
                     type=TxType.WITHDRAW if currency_amount < 0 else TxType.DEPOSIT,
                     time=time,
+                    currency_amount=currency_amount,
+                )
+            case "Dywidenda" | "Odsetki od wolnych środków":
+                yield XtbDividendInterest(
+                    id=row["ID"],
+                    time=time,
+                    symbol=row["Symbol"],
+                    currency_amount=currency_amount,
+                )
+            case "Podatek od dywidend" | "Podatek od odsetek od wolnych środków":
+                yield XtbCosts(
+                    id=row["ID"],
+                    time=time,
+                    symbol=row["Symbol"],
                     currency_amount=currency_amount,
                 )
             case _:

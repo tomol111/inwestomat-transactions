@@ -21,7 +21,9 @@ from inwestomat_transactions import (
     TxType,
     write_inwestomat_transactions,
     XtbBuySell,
+    XtbCosts,
     XtbDepositWithdraw,
+    XtbDividendInterest,
 )
 
 
@@ -306,6 +308,98 @@ class Test_convert_xtb_tx:
         result = convert_xtb_tx(tx)
         assert result == expected
 
+    def test_should_convert_pln_dividend(self) -> None:
+        tx = XtbDividendInterest(
+            id="390106349",
+            time=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+            symbol="PCR.PL",
+            currency_amount=Decimal("21.57"),
+        )
+        expected = [InwestomatTx(
+            date=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+            ticker="WSE:PCR",
+            currency=Currency.PLN,
+            type=TxType.DIVIDEND_INTEREST,
+            amount=Decimal(1),
+            price=Decimal(1),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
+            total_pln=Decimal("21.57"),
+            fee=Decimal(0),
+            comment="ID:390106349",
+        )]
+        result = convert_xtb_tx(tx)
+        assert result == expected
+
+    def test_should_convert_pln_interest(self) -> None:
+        tx = XtbDividendInterest(
+            id="510588575",
+            time=datetime.fromisoformat("2024-03-05 11:58:33+02:00"),
+            symbol="",
+            currency_amount=Decimal("1.05"),
+        )
+        expected = [InwestomatTx(
+            date=datetime.fromisoformat("2024-03-05 11:58:33+02:00"),
+            ticker="Gotówka",
+            currency=Currency.PLN,
+            type=TxType.DIVIDEND_INTEREST,
+            amount=Decimal(1),
+            price=Decimal(1),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
+            total_pln=Decimal("1.05"),
+            fee=Decimal(0),
+            comment="ID:510588575",
+        )]
+        result = convert_xtb_tx(tx)
+        assert result == expected
+
+    def test_should_convert_pln_dividend_costs(self) -> None:
+        tx = XtbCosts(
+            id="390106350",
+            time=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+            symbol="PCR.PL",
+            currency_amount=Decimal("-4.1"),
+        )
+        expected = [InwestomatTx(
+            date=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+            ticker="WSE:PCR",
+            currency=Currency.PLN,
+            type=TxType.COSTS,
+            amount=Decimal(1),
+            price=Decimal(1),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
+            total_pln=Decimal("4.1"),
+            fee=Decimal(0),
+            comment="ID:390106350",
+        )]
+        result = convert_xtb_tx(tx)
+        assert result == expected
+
+    def test_should_convert_pln_interest_costs(self) -> None:
+        tx = XtbCosts(
+            id="510588588",
+            time=datetime.fromisoformat("2024-03-05 11:58:35+02:00"),
+            symbol="",
+            currency_amount=Decimal("-0.2"),
+        )
+        expected = [InwestomatTx(
+            date=datetime.fromisoformat("2024-03-05 11:58:35+02:00"),
+            ticker="Gotówka",
+            currency=Currency.PLN,
+            type=TxType.COSTS,
+            amount=Decimal(1),
+            price=Decimal(1),
+            pln_rate=Decimal(1),
+            nominal_price=Decimal(1),
+            total_pln=Decimal("0.2"),
+            fee=Decimal(0),
+            comment="ID:510588588",
+        )]
+        result = convert_xtb_tx(tx)
+        assert result == expected
+
 
 class Test_read_xtb_transactions:
     def test_should_load_transactions_from_file(self) -> None:
@@ -320,6 +414,14 @@ class Test_read_xtb_transactions:
                 "Blik(Payu) deposit, PayU provider transaction "
                 "id=6M1GZQ8TG4240327GUEST000P01,"
                 "PayU merchant reference id=4418669, id=10832576;2000\n"
+                "510588588;Podatek od odsetek od wolnych środków;05.03.2024 11:58:35;;"
+                "Free-funds Interest Tax 2024-02;-0.2\n"
+                "510588575;Odsetki od wolnych środków;05.03.2024 11:58:33;;"
+                "Free-funds Interest 2024-02;1.05\n"
+                "390106350;Podatek od dywidend;10.05.2023 12:00:14;PCR.PL;"
+                "PCR.PL PLN WHT 19%;-4.1\n"
+                "390106349;Dywidenda;10.05.2023 12:00:14;PCR.PL;"
+                "PCR.PL PLN 21.5700/ SHR;21.57\n"
             ),
             newline=None,
         )
@@ -347,6 +449,30 @@ class Test_read_xtb_transactions:
                 type=TxType.DEPOSIT,
                 time=datetime.fromisoformat("2024-03-27 16:25:24+02:00"),
                 currency_amount=Decimal("2000"),
+            ),
+            XtbCosts(
+                id="510588588",
+                time=datetime.fromisoformat("2024-03-05 11:58:35+02:00"),
+                symbol="",
+                currency_amount=Decimal("-0.2"),
+            ),
+            XtbDividendInterest(
+                id="510588575",
+                time=datetime.fromisoformat("2024-03-05 11:58:33+02:00"),
+                symbol="",
+                currency_amount=Decimal("1.05"),
+            ),
+            XtbCosts(
+                id="390106350",
+                time=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+                symbol="PCR.PL",
+                currency_amount=Decimal("-4.1"),
+            ),
+            XtbDividendInterest(
+                id="390106349",
+                time=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+                symbol="PCR.PL",
+                currency_amount=Decimal("21.57"),
             ),
         ]
 
