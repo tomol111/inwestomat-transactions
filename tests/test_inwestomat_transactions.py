@@ -1,5 +1,5 @@
 import argparse
-from datetime import datetime
+from datetime import date as Date, datetime as DateTime
 from decimal import Decimal
 import io
 from unittest import mock
@@ -10,8 +10,10 @@ from inwestomat_transactions import (
     BinanceTx,
     build_parser,
     convert_xtb_tx,
+    convert_xtb_tx_not_pln,
     Currency,
     find_pln_prices,
+    get_pln_rate,
     get_price,
     InwestomatTx,
     read_binance_transactions,
@@ -65,10 +67,20 @@ class Test_parser:
 
         assert args.exchange == "binance"
 
+    def test_should_allow_currency_as_optional_argument(self) -> None:
+        args = self.parser.parse_args("xtb in.csv --currency=usd".split())
+
+        assert args.currency == "USD"
+
+    def test_should_make_pln_default_currency(self) -> None:
+        args = self.parser.parse_args("xtb in.csv".split())
+
+        assert args.currency == "PLN"
+
 
 class Test_split_binance_tx_to_inwestomat_txs:
     def test_should_split_buy_transaction(self) -> None:
-        date = datetime.fromisoformat("2024-05-05 00:34:09")
+        date = DateTime.fromisoformat("2024-05-05 00:34:09")
         btx = BinanceTx(
             date=date,
             market=("ADA", "BTC"),
@@ -109,7 +121,7 @@ class Test_split_binance_tx_to_inwestomat_txs:
         )
 
     def test_should_split_sell_transaction(self) -> None:
-        date = datetime.fromisoformat("2024-05-01 10:17:28")
+        date = DateTime.fromisoformat("2024-05-01 10:17:28")
         btx = BinanceTx(
             date=date,
             market=("ADA", "BTC"),
@@ -169,7 +181,7 @@ class Test_get_price:
 
         price = get_price(
             mock_client,
-            datetime.fromisoformat("2024-05-01 10:17:28+00:00"),
+            DateTime.fromisoformat("2024-05-01 10:17:28+00:00"),
             ("BTC", "PLN"),
         )
 
@@ -196,7 +208,7 @@ class Test_read_binance_transactions:
         file_path = "tests/binance_transactions.xlsx"
         expected = [
             BinanceTx(
-                date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
+                date=DateTime.fromisoformat("2024-05-07 00:47:46+00:00"),
                 market=("ETH", "BTC"),
                 type=TxType.BUY,
                 price=Decimal("0.04841"),
@@ -206,7 +218,7 @@ class Test_read_binance_transactions:
                 fee_coin="ETH",
             ),
             BinanceTx(
-                date=datetime.fromisoformat("2024-05-05 00:34:09+00:00"),
+                date=DateTime.fromisoformat("2024-05-05 00:34:09+00:00"),
                 market=("ADA", "BTC"),
                 type=TxType.BUY,
                 price=Decimal("0.0000072"),
@@ -216,7 +228,7 @@ class Test_read_binance_transactions:
                 fee_coin="ADA",
             ),
             BinanceTx(
-                date=datetime.fromisoformat("2024-05-01 10:17:28+00:00"),
+                date=DateTime.fromisoformat("2024-05-01 10:17:28+00:00"),
                 market=("ADA", "BTC"),
                 type=TxType.SELL,
                 price=Decimal("0.00000757"),
@@ -237,14 +249,14 @@ class Test_convert_xtb_tx:
         tx = XtbBuySell(
             id="515820417",
             type=TxType.BUY,
-            time=datetime.fromisoformat("2024-03-14 15:55:43+02:00"),
+            time=DateTime.fromisoformat("2024-03-14 15:55:43+02:00"),
             symbol="DEK.PL",
             asset_amount=Decimal("3"),
             price=Decimal("50.60"),
             currency_amount=Decimal("-151.8"),
         )
         expected = [InwestomatTx(
-            date=datetime.fromisoformat("2024-03-14 15:55:43+02:00"),
+            date=DateTime.fromisoformat("2024-03-14 15:55:43+02:00"),
             ticker="WSE:DEK",
             currency=Currency.PLN,
             type=TxType.BUY,
@@ -263,14 +275,14 @@ class Test_convert_xtb_tx:
         tx = XtbBuySell(
             id="541449014",
             type=TxType.SELL,
-            time=datetime.fromisoformat("2024-05-02 13:03:22+02:00"),
+            time=DateTime.fromisoformat("2024-05-02 13:03:22+02:00"),
             symbol="CDR.PL",
             asset_amount=Decimal("1"),
             price=Decimal("122.30"),
             currency_amount=Decimal("122.3"),
         )
         expected = [InwestomatTx(
-            date=datetime.fromisoformat("2024-05-02 13:03:22+02:00"),
+            date=DateTime.fromisoformat("2024-05-02 13:03:22+02:00"),
             ticker="WSE:CDR",
             currency=Currency.PLN,
             type=TxType.SELL,
@@ -289,11 +301,11 @@ class Test_convert_xtb_tx:
         tx = XtbDepositWithdraw(
             id="522216966",
             type=TxType.DEPOSIT,
-            time=datetime.fromisoformat("2024-03-27 16:25:24+02:00"),
+            time=DateTime.fromisoformat("2024-03-27 16:25:24+02:00"),
             currency_amount=Decimal("2000"),
         )
         expected = [InwestomatTx(
-            date=datetime.fromisoformat("2024-03-27 16:25:24+02:00"),
+            date=DateTime.fromisoformat("2024-03-27 16:25:24+02:00"),
             ticker="Gotówka",
             currency=Currency.PLN,
             type=TxType.DEPOSIT,
@@ -311,12 +323,12 @@ class Test_convert_xtb_tx:
     def test_should_convert_pln_dividend(self) -> None:
         tx = XtbDividendInterest(
             id="390106349",
-            time=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+            time=DateTime.fromisoformat("2023-05-10 12:00:14+02:00"),
             symbol="PCR.PL",
             currency_amount=Decimal("21.57"),
         )
         expected = [InwestomatTx(
-            date=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+            date=DateTime.fromisoformat("2023-05-10 12:00:14+02:00"),
             ticker="WSE:PCR",
             currency=Currency.PLN,
             type=TxType.DIVIDEND_INTEREST,
@@ -334,12 +346,12 @@ class Test_convert_xtb_tx:
     def test_should_convert_pln_interest(self) -> None:
         tx = XtbDividendInterest(
             id="510588575",
-            time=datetime.fromisoformat("2024-03-05 11:58:33+02:00"),
+            time=DateTime.fromisoformat("2024-03-05 11:58:33+02:00"),
             symbol="",
             currency_amount=Decimal("1.05"),
         )
         expected = [InwestomatTx(
-            date=datetime.fromisoformat("2024-03-05 11:58:33+02:00"),
+            date=DateTime.fromisoformat("2024-03-05 11:58:33+02:00"),
             ticker="Gotówka",
             currency=Currency.PLN,
             type=TxType.DIVIDEND_INTEREST,
@@ -357,12 +369,12 @@ class Test_convert_xtb_tx:
     def test_should_convert_pln_dividend_costs(self) -> None:
         tx = XtbCosts(
             id="390106350",
-            time=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+            time=DateTime.fromisoformat("2023-05-10 12:00:14+02:00"),
             symbol="PCR.PL",
             currency_amount=Decimal("-4.1"),
         )
         expected = [InwestomatTx(
-            date=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+            date=DateTime.fromisoformat("2023-05-10 12:00:14+02:00"),
             ticker="WSE:PCR",
             currency=Currency.PLN,
             type=TxType.COSTS,
@@ -380,12 +392,12 @@ class Test_convert_xtb_tx:
     def test_should_convert_pln_interest_costs(self) -> None:
         tx = XtbCosts(
             id="510588588",
-            time=datetime.fromisoformat("2024-03-05 11:58:35+02:00"),
+            time=DateTime.fromisoformat("2024-03-05 11:58:35+02:00"),
             symbol="",
             currency_amount=Decimal("-0.2"),
         )
         expected = [InwestomatTx(
-            date=datetime.fromisoformat("2024-03-05 11:58:35+02:00"),
+            date=DateTime.fromisoformat("2024-03-05 11:58:35+02:00"),
             ticker="Gotówka",
             currency=Currency.PLN,
             type=TxType.COSTS,
@@ -399,6 +411,99 @@ class Test_convert_xtb_tx:
         )]
         result = convert_xtb_tx(tx)
         assert result == expected
+
+    def test_should_convert_not_pln_buy_transaction(self) -> None:
+        tx = XtbBuySell(
+            id="532073316",
+            type=TxType.BUY,
+            time=DateTime.fromisoformat("2024-04-15 15:45:00+02:00"),
+            symbol="DTLA.UK",
+            asset_amount=Decimal("10"),
+            price=Decimal("4.3425"),
+            currency_amount=Decimal("-43.43"),
+        )
+        expected = [
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-04-15 15:45:00+02:00"),
+                ticker="LON:DTLA",
+                currency=Currency.USD,
+                type=TxType.BUY,
+                amount=Decimal("10"),
+                price=Decimal("4.3425"),
+                pln_rate=Decimal("3.9983"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("173.646169"),
+                fee=Decimal("0"),
+                comment="ID:532073316",
+            ),
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-04-15 15:45:00+02:00"),
+                ticker="Waluty_USD",
+                currency=Currency.USD,
+                type=TxType.SELL,
+                amount=Decimal("43.43"),
+                price=Decimal(1),
+                pln_rate=Decimal("3.9983"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("173.646169"),
+                fee=Decimal("0"),
+                comment="ID:532073316",
+            ),
+        ]
+        result = convert_xtb_tx_not_pln(tx, Currency.USD, Decimal("3.9983"))
+        assert result == expected
+
+    def test_should_convert_not_pln_sell_transaction(self) -> None:
+        tx = XtbBuySell(
+            id="512039960",
+            type=TxType.SELL,
+            time=DateTime.fromisoformat("2024-03-07 09:00:27+02:00"),
+            symbol="GDXJ.UK",
+            asset_amount=Decimal("2"),
+            price=Decimal("31.740"),
+            currency_amount=Decimal("63.48"),
+        )
+        expected = [
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-03-07 09:00:27+02:00"),
+                ticker="LON:GDXJ",
+                currency=Currency.USD,
+                type=TxType.SELL,
+                amount=Decimal("2"),
+                price=Decimal("31.740"),
+                pln_rate=Decimal("3.9630"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("251.57124"),
+                fee=Decimal("0"),
+                comment="ID:512039960",
+            ),
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-03-07 09:00:27+02:00"),
+                ticker="Waluty_USD",
+                currency=Currency.USD,
+                type=TxType.BUY,
+                amount=Decimal("63.48"),
+                price=Decimal(1),
+                pln_rate=Decimal("3.9630"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("251.57124"),
+                fee=Decimal("0"),
+                comment="ID:512039960",
+            ),
+        ]
+        result = convert_xtb_tx_not_pln(tx, Currency.USD, Decimal("3.9630"))
+        assert result == expected
+
+
+@pytest.mark.webtest
+class Test_get_pln_rate:
+    def test_should_get_mid_pln_rate_for_currency_at_preceding_session(self) -> None:
+        result = get_pln_rate(Currency.USD, Date.fromisoformat("2024-03-07"))
+        assert result == Decimal("3.9630")  # 2024-03-06
+
+    def test_should_get_pln_rate_for_session_that_was_few_days_earlier(self) -> None:
+        result = get_pln_rate(Currency.EUR, Date.fromisoformat("2024-08-12"))
+        assert result == Decimal("4.3238")  # 2024-08-09
 
 
 class Test_read_xtb_transactions:
@@ -429,7 +534,7 @@ class Test_read_xtb_transactions:
             XtbBuySell(
                 id="541449014",
                 type=TxType.SELL,
-                time=datetime.fromisoformat("2024-05-02 13:03:22+02:00"),
+                time=DateTime.fromisoformat("2024-05-02 13:03:22+02:00"),
                 symbol="CDR.PL",
                 asset_amount=Decimal("1"),
                 price=Decimal("122.30"),
@@ -438,7 +543,7 @@ class Test_read_xtb_transactions:
             XtbBuySell(
                 id="515820417",
                 type=TxType.BUY,
-                time=datetime.fromisoformat("2024-03-14 15:55:43+02:00"),
+                time=DateTime.fromisoformat("2024-03-14 15:55:43+02:00"),
                 symbol="DEK.PL",
                 asset_amount=Decimal("3"),
                 price=Decimal("50.60"),
@@ -447,30 +552,30 @@ class Test_read_xtb_transactions:
             XtbDepositWithdraw(
                 id="522216966",
                 type=TxType.DEPOSIT,
-                time=datetime.fromisoformat("2024-03-27 16:25:24+02:00"),
+                time=DateTime.fromisoformat("2024-03-27 16:25:24+02:00"),
                 currency_amount=Decimal("2000"),
             ),
             XtbCosts(
                 id="510588588",
-                time=datetime.fromisoformat("2024-03-05 11:58:35+02:00"),
+                time=DateTime.fromisoformat("2024-03-05 11:58:35+02:00"),
                 symbol="",
                 currency_amount=Decimal("-0.2"),
             ),
             XtbDividendInterest(
                 id="510588575",
-                time=datetime.fromisoformat("2024-03-05 11:58:33+02:00"),
+                time=DateTime.fromisoformat("2024-03-05 11:58:33+02:00"),
                 symbol="",
                 currency_amount=Decimal("1.05"),
             ),
             XtbCosts(
                 id="390106350",
-                time=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+                time=DateTime.fromisoformat("2023-05-10 12:00:14+02:00"),
                 symbol="PCR.PL",
                 currency_amount=Decimal("-4.1"),
             ),
             XtbDividendInterest(
                 id="390106349",
-                time=datetime.fromisoformat("2023-05-10 12:00:14+02:00"),
+                time=DateTime.fromisoformat("2023-05-10 12:00:14+02:00"),
                 symbol="PCR.PL",
                 currency_amount=Decimal("21.57"),
             ),
@@ -485,7 +590,7 @@ class Test_write_inwestomat_transactions:
     def test_should_save_transactions_in_csv_format(self) -> None:
         txs = [
             InwestomatTx(
-                date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
+                date=DateTime.fromisoformat("2024-05-07 00:47:46+00:00"),
                 ticker="CURRENCY:BTCPLN",
                 currency=Currency.PLN,
                 type=TxType.SELL,
@@ -497,7 +602,7 @@ class Test_write_inwestomat_transactions:
                 fee=Decimal("0"),
             ),
             InwestomatTx(
-                date=datetime.fromisoformat("2024-05-07 00:47:46+00:00"),
+                date=DateTime.fromisoformat("2024-05-07 00:47:46+00:00"),
                 ticker="CURRENCY:ETHPLN",
                 currency=Currency.PLN,
                 type=TxType.BUY,

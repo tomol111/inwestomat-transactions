@@ -3,7 +3,12 @@ from __future__ import annotations
 import argparse
 import csv
 import dataclasses
-from datetime import datetime, timedelta, timezone
+from datetime import (
+    date as Date,
+    datetime as DateTime,
+    timedelta as TimeDelta,
+    timezone as TimeZone,
+)
 from decimal import Decimal
 import enum
 import itertools
@@ -22,6 +27,7 @@ from typing import (
 
 import binance
 import openpyxl
+import requests
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -32,7 +38,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             convert_binance(args.input_path, sys.stdout)
         case Exchange.XTB:
             with open(args.input_path, "r", newline="") as input_file:
-                convert_xtb(input_file, sys.stdout)
+                convert_xtb(input_file, sys.stdout, Currency(args.currency))
         case _:
             raise NotImplementedError(args.exchange)
 
@@ -42,6 +48,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "exchange", choices=[x.value for x in Exchange], type=str.lower,
         help="Giełda, kórej transakcje mają być przekonwertowane."
+    )
+    parser.add_argument(
+        "-c", "--currency", choices=[c.value for c in Currency],
+        type=str.upper, default=Currency.PLN.value,
+        help=f"Waluta w jakiej konto jest denominowane (domyślnie: {Currency.PLN.value}). "
+        "Jeśli giełda nie posiada głównej waluty i informacja o walucie jest zawarta w danych "
+        "o transakcjach, ten parametr jest ignorowany."
     )
     parser.add_argument("input_path", help="Ściażka do pliku wejściowego.")
     return parser
@@ -96,7 +109,7 @@ class Currency(enum.Enum):
 
 @dataclasses.dataclass(frozen=True)
 class BinanceTx:
-    date: datetime
+    date: DateTime
     market: Market
     type: BuyOrSell
     amount: Decimal
@@ -110,7 +123,7 @@ class BinanceTx:
 class XtbBuySell:
     id: str
     type: BuyOrSell
-    time: datetime
+    time: DateTime
     symbol: Ticker
     asset_amount: Decimal
     price: Decimal
@@ -121,14 +134,14 @@ class XtbBuySell:
 class XtbDepositWithdraw:
     id: str
     type: DepositOrWithdraw
-    time: datetime
+    time: DateTime
     currency_amount: Decimal
 
 
 @dataclasses.dataclass(frozen=True)
 class XtbDividendInterest:
     id: str
-    time: datetime
+    time: DateTime
     symbol: Ticker
     currency_amount: Decimal
 
@@ -136,7 +149,7 @@ class XtbDividendInterest:
 @dataclasses.dataclass(frozen=True)
 class XtbCosts:
     id: str
-    time: datetime
+    time: DateTime
     symbol: Ticker
     currency_amount: Decimal
 
@@ -146,7 +159,7 @@ XtbTx = XtbBuySell | XtbDepositWithdraw | XtbDividendInterest | XtbCosts
 
 @dataclasses.dataclass(frozen=True)
 class InwestomatTx:
-    date: datetime
+    date: DateTime
     ticker: Ticker
     currency: Currency
     type: TxType
@@ -255,7 +268,7 @@ class KLineValue(enum.Enum):
         return self.value
 
 
-def get_price(client: binance.Client, date: datetime, market: Market) -> Decimal:
+def get_price(client: binance.Client, date: DateTime, market: Market) -> Decimal:
     assert date.tzinfo
     assert not date.microsecond
     start = int(date.timestamp() * 1000)
@@ -289,7 +302,7 @@ def read_binance_transactions(file_path: str) -> Iterator[BinanceTx]:
         if date is None:
             break
         yield BinanceTx(
-            date=datetime.fromisoformat(date).replace(tzinfo=timezone.utc),
+            date=DateTime.fromisoformat(date).replace(tzinfo=TimeZone.utc),
             market=identify_binance_market_assets(market),
             type=cast(BuyOrSell, TxType(typ)),
             price=Decimal(price),
@@ -313,24 +326,31 @@ def identify_binance_market_assets(market: str) -> Market:
     raise NotImplementedError("Unkown quote asset")
 
 
-def convert_xtb(input_file: TextIO, output_file: TextIO) -> None:
+def convert_xtb(input_file: TextIO, output_file: TextIO, currency: Currency) -> None:
     xtb_txs = read_xtb_transactions(input_file)
 
-    inwestomat_txs = itertools.chain.from_iterable(
-        convert_xtb_tx(tx)
-        for tx in xtb_txs
-    )
+    if currency == Currency.PLN:
+        inwestomat_txs = itertools.chain.from_iterable(
+            convert_xtb_tx(tx)
+            for tx in xtb_txs
+        )
+    else:
+        inwestomat_txs = itertools.chain.from_iterable(
+            convert_xtb_tx_not_pln(tx, currency, get_pln_rate(currency, tx.time.date()))
+            for tx in xtb_txs
+        )
 
     write_inwestomat_transactions(output_file, inwestomat_txs)
 
 
 def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
+    currency = Currency.PLN
     match tx:
         case XtbBuySell():
             inwestomat_tx = InwestomatTx(
                 date=tx.time,
                 ticker=convert_xtb_ticker(tx.symbol),
-                currency=Currency.PLN,
+                currency=currency,
                 type=tx.type,
                 amount=tx.asset_amount,
                 price=tx.price,
@@ -343,8 +363,8 @@ def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
         case XtbDepositWithdraw():
             inwestomat_tx = InwestomatTx(
                 date=tx.time,
-                ticker=Currency.PLN.ticker,
-                currency=Currency.PLN,
+                ticker=currency.ticker,
+                currency=currency,
                 type=tx.type,
                 amount=Decimal(1),
                 price=Decimal(1),
@@ -357,8 +377,8 @@ def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
         case XtbDividendInterest():
             inwestomat_tx = InwestomatTx(
                 date=tx.time,
-                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else Currency.PLN.ticker,
-                currency=Currency.PLN,
+                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else currency.ticker,
+                currency=currency,
                 type=TxType.DIVIDEND_INTEREST,
                 amount=Decimal(1),
                 price=Decimal(1),
@@ -371,8 +391,8 @@ def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
         case XtbCosts():
             inwestomat_tx = InwestomatTx(
                 date=tx.time,
-                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else Currency.PLN.ticker,
-                currency=Currency.PLN,
+                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else currency.ticker,
+                currency=currency,
                 type=TxType.COSTS,
                 amount=Decimal(1),
                 price=Decimal(1),
@@ -388,8 +408,64 @@ def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
     return [inwestomat_tx]
 
 
+def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> list[InwestomatTx]:
+    tx = cast(XtbBuySell, tx)
+    match tx.type:
+        case TxType.BUY:
+            asset_txtype, currency_txtype = TxType.BUY, TxType.SELL
+        case TxType.SELL:
+            asset_txtype, currency_txtype = TxType.SELL, TxType.BUY
+
+    total_pln = abs(tx.currency_amount)*pln_rate
+
+    asset_tx = InwestomatTx(
+        date=tx.time,
+        ticker=convert_xtb_ticker(tx.symbol),
+        currency=currency,
+        type=asset_txtype,
+        amount=tx.asset_amount,
+        price=tx.price,
+        pln_rate=pln_rate,
+        nominal_price=Decimal(1),
+        total_pln=total_pln,
+        fee=Decimal(0),
+        comment=f"ID:{tx.id}",
+    )
+    currency_tx = InwestomatTx(
+        date=tx.time,
+        ticker=currency.ticker,
+        currency=currency,
+        type=currency_txtype,
+        amount=abs(tx.currency_amount),
+        price=Decimal(1),
+        pln_rate=pln_rate,
+        nominal_price=Decimal(1),
+        total_pln=total_pln,
+        fee=Decimal(0),
+        comment=f"ID:{tx.id}",
+    )
+    return [asset_tx, currency_tx]
+
+
+def get_pln_rate(currency: Currency, date: Date) -> Decimal:
+    stop = (date - TimeDelta(days=1)).strftime("%Y-%m-%d")
+    start = (date - TimeDelta(days=5)).strftime("%Y-%m-%d")
+    response = requests.get(
+        f"https://api.nbp.pl/api/exchangerates/rates/a/{currency.value.lower()}/{start}/{stop}",
+        data={"format": "json"},
+    )
+    data = response.json(parse_float=Decimal)
+    return data["rates"][-1]["mid"]
+
+
 def convert_xtb_ticker(ticker: Ticker) -> Ticker:
-    return "WSE:" + ticker.removesuffix(".PL")
+    core, sep, country = ticker.partition(".")
+    assert sep
+    match country:
+        case "PL": return f"WSE:{core}"
+        case "UK": return f"LON:{core}"
+        case unknown_country:
+            raise ValueError(f"Nieznany kraj '{unknown_country}' w tickerze '{ticker}'")
 
 
 XTB_BUY_SELL_COMMENT_REGEX: Final = re.compile(
@@ -407,7 +483,7 @@ XTB_BUY_SELL_COMMENT_REGEX: Final = re.compile(
 def read_xtb_transactions(file: TextIO) -> Iterator[XtbTx]:
     row: dict[str, str]
     for row in csv.DictReader(file, delimiter=";"):
-        time = datetime.strptime(row["Time"], "%d.%m.%Y %H:%M:%S")\
+        time = DateTime.strptime(row["Time"], "%d.%m.%Y %H:%M:%S")\
             .replace(tzinfo=TIMEZONE)
         currency_amount = Decimal(row["Amount"])
 
@@ -449,7 +525,7 @@ def read_xtb_transactions(file: TextIO) -> Iterator[XtbTx]:
                 raise NotImplementedError(f"Nieznany typ transakcji: {row['Type']}")
 
 
-TIMEZONE: Final = timezone(timedelta(hours=2))
+TIMEZONE: Final = TimeZone(TimeDelta(hours=2))
 
 
 def write_inwestomat_transactions(file: TextIO, txs: Iterable[InwestomatTx]) -> None:
