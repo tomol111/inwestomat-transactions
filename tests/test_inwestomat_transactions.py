@@ -10,7 +10,6 @@ from inwestomat_transactions import (
     BinanceTx,
     build_parser,
     convert_xtb_tx,
-    convert_xtb_tx_not_pln,
     Currency,
     find_pln_prices,
     get_pln_rate,
@@ -268,7 +267,7 @@ class Test_convert_xtb_tx:
             fee=Decimal("0"),
             comment="ID:515820417",
         )]
-        result = convert_xtb_tx(tx)
+        result = convert_xtb_tx(tx, Currency.PLN, Decimal(1))
         assert result == expected
 
     def test_should_convert_pln_sell_transaction(self) -> None:
@@ -294,7 +293,7 @@ class Test_convert_xtb_tx:
             fee=Decimal("0"),
             comment="ID:541449014",
         )]
-        result = convert_xtb_tx(tx)
+        result = convert_xtb_tx(tx, Currency.PLN, Decimal(1))
         assert result == expected
 
     def test_should_convert_pln_deposit(self) -> None:
@@ -317,7 +316,7 @@ class Test_convert_xtb_tx:
             fee=Decimal(0),
             comment="ID:522216966",
         )]
-        result = convert_xtb_tx(tx)
+        result = convert_xtb_tx(tx, Currency.PLN, Decimal(1))
         assert result == expected
 
     @pytest.mark.xfail(reason="Brak próbek danych", run=False)
@@ -344,7 +343,7 @@ class Test_convert_xtb_tx:
             fee=Decimal(0),
             comment="ID:390106349",
         )]
-        result = convert_xtb_tx(tx)
+        result = convert_xtb_tx(tx, Currency.PLN, Decimal(1))
         assert result == expected
 
     def test_should_convert_pln_interest(self) -> None:
@@ -367,7 +366,7 @@ class Test_convert_xtb_tx:
             fee=Decimal(0),
             comment="ID:510588575",
         )]
-        result = convert_xtb_tx(tx)
+        result = convert_xtb_tx(tx, Currency.PLN, Decimal(1))
         assert result == expected
 
     def test_should_convert_pln_dividend_costs(self) -> None:
@@ -390,7 +389,7 @@ class Test_convert_xtb_tx:
             fee=Decimal(0),
             comment="ID:390106350",
         )]
-        result = convert_xtb_tx(tx)
+        result = convert_xtb_tx(tx, Currency.PLN, Decimal(1))
         assert result == expected
 
     def test_should_convert_pln_interest_costs(self) -> None:
@@ -413,7 +412,7 @@ class Test_convert_xtb_tx:
             fee=Decimal(0),
             comment="ID:510588588",
         )]
-        result = convert_xtb_tx(tx)
+        result = convert_xtb_tx(tx, Currency.PLN, Decimal(1))
         assert result == expected
 
     def test_should_convert_not_pln_buy_transaction(self) -> None:
@@ -454,7 +453,7 @@ class Test_convert_xtb_tx:
                 comment="ID:532073316",
             ),
         ]
-        result = convert_xtb_tx_not_pln(tx, Currency.USD, Decimal("3.9983"))
+        result = convert_xtb_tx(tx, Currency.USD, Decimal("3.9983"))
         assert result == expected
 
     def test_should_convert_not_pln_sell_transaction(self) -> None:
@@ -495,7 +494,7 @@ class Test_convert_xtb_tx:
                 comment="ID:512039960",
             ),
         ]
-        result = convert_xtb_tx_not_pln(tx, Currency.USD, Decimal("3.9630"))
+        result = convert_xtb_tx(tx, Currency.USD, Decimal("3.9630"))
         assert result == expected
 
     def test_should_convert_not_pln_deposit_transaction(self) -> None:
@@ -533,7 +532,7 @@ class Test_convert_xtb_tx:
                 comment="ID:535704358",
             ),
         ]
-        result = convert_xtb_tx_not_pln(tx, Currency.USD, Decimal("4.0688"))
+        result = convert_xtb_tx(tx, Currency.USD, Decimal("4.0688"))
         assert result == expected
 
     @pytest.mark.xfail(reason="Brak próbek danych", run=False)
@@ -579,7 +578,7 @@ class Test_convert_xtb_tx:
                 comment="ID:495802028",
             ),
         ]
-        result = convert_xtb_tx_not_pln(tx, Currency.EUR, Decimal("4.3434"))
+        result = convert_xtb_tx(tx, Currency.EUR, Decimal("4.3434"))
         assert result == expected
 
     @pytest.mark.xfail(reason="Brak próbek danych", run=False)
@@ -621,7 +620,7 @@ class Test_convert_xtb_tx:
                 comment="ID:495802050",
             ),
         ]
-        result = convert_xtb_tx_not_pln(tx, Currency.EUR, Decimal("4.3434"))
+        result = convert_xtb_tx(tx, Currency.EUR, Decimal("4.3434"))
         assert result == expected
 
 
@@ -634,6 +633,10 @@ class Test_get_pln_rate:
     def test_should_get_pln_rate_for_session_that_was_few_days_earlier(self) -> None:
         result = get_pln_rate(Currency.EUR, Date.fromisoformat("2024-08-12"))
         assert result == Decimal("4.3238")  # 2024-08-09
+
+    def test_should_return_one_for_pln(self) -> None:
+        result = get_pln_rate(Currency.PLN, Date.fromisoformat("2024-04-09"))
+        assert result == Decimal(1)
 
 
 class Test_read_xtb_transactions:

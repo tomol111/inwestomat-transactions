@@ -329,101 +329,31 @@ def identify_binance_market_assets(market: str) -> Market:
 def convert_xtb(input_file: TextIO, output_file: TextIO, currency: Currency) -> None:
     xtb_txs = read_xtb_transactions(input_file)
 
-    if currency == Currency.PLN:
-        inwestomat_txs = itertools.chain.from_iterable(
-            convert_xtb_tx(tx)
-            for tx in xtb_txs
-        )
-    else:
-        inwestomat_txs = itertools.chain.from_iterable(
-            convert_xtb_tx_not_pln(tx, currency, get_pln_rate(currency, tx.time.date()))
-            for tx in xtb_txs
-        )
+    inwestomat_txs = itertools.chain.from_iterable(
+        convert_xtb_tx(tx, currency, get_pln_rate(currency, tx.time.date()))
+        for tx in xtb_txs
+    )
 
     write_inwestomat_transactions(output_file, inwestomat_txs)
 
 
-def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
-    currency = Currency.PLN
-    match tx:
-        case XtbBuySell():
-            inwestomat_tx = InwestomatTx(
-                date=tx.time,
-                ticker=convert_xtb_ticker(tx.symbol),
-                currency=currency,
-                type=tx.type,
-                amount=tx.asset_amount,
-                price=tx.price,
-                pln_rate=Decimal(1),
-                nominal_price=Decimal(1),
-                total_pln=abs(tx.currency_amount),
-                fee=Decimal(0),
-                comment=f"ID:{tx.id}",
-            )
-        case XtbDepositWithdraw():
-            inwestomat_tx = InwestomatTx(
-                date=tx.time,
-                ticker=currency.ticker,
-                currency=currency,
-                type=tx.type,
-                amount=Decimal(1),
-                price=Decimal(1),
-                pln_rate=Decimal(1),
-                nominal_price=Decimal(1),
-                total_pln=abs(tx.currency_amount),
-                fee=Decimal(0),
-                comment=f"ID:{tx.id}",
-            )
-        case XtbDividendInterest():
-            inwestomat_tx = InwestomatTx(
-                date=tx.time,
-                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else currency.ticker,
-                currency=currency,
-                type=TxType.DIVIDEND_INTEREST,
-                amount=Decimal(1),
-                price=Decimal(1),
-                pln_rate=Decimal(1),
-                nominal_price=Decimal(1),
-                total_pln=tx.currency_amount,
-                fee=Decimal(0),
-                comment=f"ID:{tx.id}",
-            )
-        case XtbCosts():
-            inwestomat_tx = InwestomatTx(
-                date=tx.time,
-                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else currency.ticker,
-                currency=currency,
-                type=TxType.COSTS,
-                amount=Decimal(1),
-                price=Decimal(1),
-                pln_rate=Decimal(1),
-                nominal_price=Decimal(1),
-                total_pln=abs(tx.currency_amount),
-                fee=Decimal(0),
-                comment=f"ID:{tx.id}",
-            )
-        case unknown:
-            raise NotImplementedError(unknown)
+def convert_xtb_tx(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> list[InwestomatTx]:
+    total_pln = abs(tx.currency_amount)*pln_rate
 
-    return [inwestomat_tx]
-
-
-def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> list[InwestomatTx]:
+    asset_tx: InwestomatTx
+    currency_tx: InwestomatTx
     match tx:
         case XtbBuySell() as tx:
             match tx.type:
                 case TxType.BUY:
-                    asset_txtype, currency_txtype = TxType.BUY, TxType.SELL
+                    currency_txtype = TxType.SELL
                 case TxType.SELL:
-                    asset_txtype, currency_txtype = TxType.SELL, TxType.BUY
-
-            total_pln = abs(tx.currency_amount)*pln_rate
-
+                    currency_txtype = TxType.BUY
             asset_tx = InwestomatTx(
                 date=tx.time,
                 ticker=convert_xtb_ticker(tx.symbol),
                 currency=currency,
-                type=asset_txtype,
+                type=tx.type,
                 amount=tx.asset_amount,
                 price=tx.price,
                 pln_rate=pln_rate,
@@ -449,17 +379,14 @@ def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> 
         case XtbDepositWithdraw() as tx:
             match tx.type:
                 case TxType.WITHDRAW:
-                    asset_txtype, currency_txtype = TxType.WITHDRAW, TxType.SELL
+                    currency_txtype = TxType.SELL
                 case TxType.DEPOSIT:
-                    asset_txtype, currency_txtype = TxType.DEPOSIT, TxType.BUY
-
-            total_pln = abs(tx.currency_amount)*pln_rate
-
+                    currency_txtype = TxType.BUY
             asset_tx = InwestomatTx(
                 date=tx.time,
                 ticker=Currency.PLN.ticker,
                 currency=Currency.PLN,
-                type=asset_txtype,
+                type=tx.type,
                 amount=Decimal(1),
                 price=Decimal(1),
                 pln_rate=Decimal(1),
@@ -483,15 +410,11 @@ def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> 
             )
 
         case XtbDividendInterest() as tx:
-            asset_txtype, currency_txtype = TxType.DIVIDEND_INTEREST, TxType.BUY
-
-            total_pln = abs(tx.currency_amount)*pln_rate
-
             asset_tx = InwestomatTx(
                 date=tx.time,
-                ticker=currency.ticker,
+                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else currency.ticker,
                 currency=currency,
-                type=asset_txtype,
+                type=TxType.DIVIDEND_INTEREST,
                 amount=Decimal(1),
                 price=Decimal(1),
                 pln_rate=pln_rate,
@@ -504,7 +427,7 @@ def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> 
                 date=tx.time,
                 ticker=currency.ticker,
                 currency=currency,
-                type=currency_txtype,
+                type=TxType.BUY,
                 amount=abs(tx.currency_amount),
                 price=Decimal(1),
                 pln_rate=pln_rate,
@@ -515,15 +438,11 @@ def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> 
             )
 
         case XtbCosts() as tx:
-            asset_txtype, currency_txtype = TxType.COSTS, TxType.SELL
-
-            total_pln = abs(tx.currency_amount)*pln_rate
-
             asset_tx = InwestomatTx(
                 date=tx.time,
-                ticker=Currency.PLN.ticker,
+                ticker=convert_xtb_ticker(tx.symbol) if tx.symbol else Currency.PLN.ticker,
                 currency=Currency.PLN,
-                type=asset_txtype,
+                type=TxType.COSTS,
                 amount=Decimal(1),
                 price=Decimal(1),
                 pln_rate=pln_rate,
@@ -536,7 +455,7 @@ def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> 
                 date=tx.time,
                 ticker=currency.ticker,
                 currency=currency,
-                type=currency_txtype,
+                type=TxType.SELL,
                 amount=abs(tx.currency_amount),
                 price=Decimal(1),
                 pln_rate=pln_rate,
@@ -546,13 +465,16 @@ def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> 
                 comment=f"ID:{tx.id}",
             )
 
-        case unknown:
-            raise NotImplementedError(unknown)
+        case unreachable:
+            raise AssertionError(f"Wyczerpane możliwości a otrzymano: {unreachable}")
 
-    return [asset_tx, currency_tx]
+    return [asset_tx] if currency == Currency.PLN else [asset_tx, currency_tx]
 
 
 def get_pln_rate(currency: Currency, date: Date) -> Decimal:
+    if currency == Currency.PLN:
+        return Decimal(1)
+
     stop = (date - TimeDelta(days=1)).strftime("%Y-%m-%d")
     start = (date - TimeDelta(days=5)).strftime("%Y-%m-%d")
     response = requests.get(
