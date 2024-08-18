@@ -320,6 +320,10 @@ class Test_convert_xtb_tx:
         result = convert_xtb_tx(tx)
         assert result == expected
 
+    @pytest.mark.xfail(reason="Brak próbek danych", run=False)
+    def test_should_conbert_pln_withdraw(self) -> None:
+        raise NotImplementedError
+
     def test_should_convert_pln_dividend(self) -> None:
         tx = XtbDividendInterest(
             id="390106349",
@@ -532,6 +536,14 @@ class Test_convert_xtb_tx:
         result = convert_xtb_tx_not_pln(tx, Currency.USD, Decimal("4.0688"))
         assert result == expected
 
+    @pytest.mark.xfail(reason="Brak próbek danych", run=False)
+    def test_should_conbert_not_pln_withdraw(self) -> None:
+        raise NotImplementedError
+
+    @pytest.mark.xfail(reason="Brak próbek danych", run=False)
+    def test_should_conbert_not_pln_dividend(self) -> None:
+        raise NotImplementedError
+
     def test_should_convert_not_pln_interest(self) -> None:
         tx = XtbDividendInterest(
             id="495802028",
@@ -569,6 +581,10 @@ class Test_convert_xtb_tx:
         ]
         result = convert_xtb_tx_not_pln(tx, Currency.EUR, Decimal("4.3434"))
         assert result == expected
+
+    @pytest.mark.xfail(reason="Brak próbek danych", run=False)
+    def test_should_conbert_not_pln_dividend_costs(self) -> None:
+        raise NotImplementedError
 
     def test_should_convert_not_pln_interest_costs(self) -> None:
         tx = XtbCosts(
