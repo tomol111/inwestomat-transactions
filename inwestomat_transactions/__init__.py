@@ -409,41 +409,146 @@ def convert_xtb_tx(tx: XtbTx) -> list[InwestomatTx]:
 
 
 def convert_xtb_tx_not_pln(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> list[InwestomatTx]:
-    tx = cast(XtbBuySell, tx)
-    match tx.type:
-        case TxType.BUY:
-            asset_txtype, currency_txtype = TxType.BUY, TxType.SELL
-        case TxType.SELL:
-            asset_txtype, currency_txtype = TxType.SELL, TxType.BUY
+    match tx:
+        case XtbBuySell() as tx:
+            match tx.type:
+                case TxType.BUY:
+                    asset_txtype, currency_txtype = TxType.BUY, TxType.SELL
+                case TxType.SELL:
+                    asset_txtype, currency_txtype = TxType.SELL, TxType.BUY
 
-    total_pln = abs(tx.currency_amount)*pln_rate
+            total_pln = abs(tx.currency_amount)*pln_rate
 
-    asset_tx = InwestomatTx(
-        date=tx.time,
-        ticker=convert_xtb_ticker(tx.symbol),
-        currency=currency,
-        type=asset_txtype,
-        amount=tx.asset_amount,
-        price=tx.price,
-        pln_rate=pln_rate,
-        nominal_price=Decimal(1),
-        total_pln=total_pln,
-        fee=Decimal(0),
-        comment=f"ID:{tx.id}",
-    )
-    currency_tx = InwestomatTx(
-        date=tx.time,
-        ticker=currency.ticker,
-        currency=currency,
-        type=currency_txtype,
-        amount=abs(tx.currency_amount),
-        price=Decimal(1),
-        pln_rate=pln_rate,
-        nominal_price=Decimal(1),
-        total_pln=total_pln,
-        fee=Decimal(0),
-        comment=f"ID:{tx.id}",
-    )
+            asset_tx = InwestomatTx(
+                date=tx.time,
+                ticker=convert_xtb_ticker(tx.symbol),
+                currency=currency,
+                type=asset_txtype,
+                amount=tx.asset_amount,
+                price=tx.price,
+                pln_rate=pln_rate,
+                nominal_price=Decimal(1),
+                total_pln=total_pln,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+            currency_tx = InwestomatTx(
+                date=tx.time,
+                ticker=currency.ticker,
+                currency=currency,
+                type=currency_txtype,
+                amount=abs(tx.currency_amount),
+                price=Decimal(1),
+                pln_rate=pln_rate,
+                nominal_price=Decimal(1),
+                total_pln=total_pln,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+
+        case XtbDepositWithdraw() as tx:
+            match tx.type:
+                case TxType.WITHDRAW:
+                    asset_txtype, currency_txtype = TxType.WITHDRAW, TxType.SELL
+                case TxType.DEPOSIT:
+                    asset_txtype, currency_txtype = TxType.DEPOSIT, TxType.BUY
+
+            total_pln = abs(tx.currency_amount)*pln_rate
+
+            asset_tx = InwestomatTx(
+                date=tx.time,
+                ticker=Currency.PLN.ticker,
+                currency=Currency.PLN,
+                type=asset_txtype,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=Decimal(1),
+                nominal_price=Decimal(1),
+                total_pln=total_pln,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+            currency_tx = InwestomatTx(
+                date=tx.time,
+                ticker=currency.ticker,
+                currency=currency,
+                type=currency_txtype,
+                amount=abs(tx.currency_amount),
+                price=Decimal(1),
+                pln_rate=pln_rate,
+                nominal_price=Decimal(1),
+                total_pln=total_pln,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+
+        case XtbDividendInterest() as tx:
+            asset_txtype, currency_txtype = TxType.DIVIDEND_INTEREST, TxType.BUY
+
+            total_pln = abs(tx.currency_amount)*pln_rate
+
+            asset_tx = InwestomatTx(
+                date=tx.time,
+                ticker=currency.ticker,
+                currency=currency,
+                type=asset_txtype,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=pln_rate,
+                nominal_price=Decimal(1),
+                total_pln=total_pln,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+            currency_tx = InwestomatTx(
+                date=tx.time,
+                ticker=currency.ticker,
+                currency=currency,
+                type=currency_txtype,
+                amount=abs(tx.currency_amount),
+                price=Decimal(1),
+                pln_rate=pln_rate,
+                nominal_price=Decimal(1),
+                total_pln=total_pln,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+
+        case XtbCosts() as tx:
+            asset_txtype, currency_txtype = TxType.COSTS, TxType.SELL
+
+            total_pln = abs(tx.currency_amount)*pln_rate
+
+            asset_tx = InwestomatTx(
+                date=tx.time,
+                ticker=Currency.PLN.ticker,
+                currency=Currency.PLN,
+                type=asset_txtype,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=pln_rate,
+                nominal_price=Decimal(1),
+                total_pln=total_pln,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+            currency_tx = InwestomatTx(
+                date=tx.time,
+                ticker=currency.ticker,
+                currency=currency,
+                type=currency_txtype,
+                amount=abs(tx.currency_amount),
+                price=Decimal(1),
+                pln_rate=pln_rate,
+                nominal_price=Decimal(1),
+                total_pln=total_pln,
+                fee=Decimal(0),
+                comment=f"ID:{tx.id}",
+            )
+
+        case unknown:
+            raise NotImplementedError(unknown)
+
     return [asset_tx, currency_tx]
 
 

@@ -494,6 +494,120 @@ class Test_convert_xtb_tx:
         result = convert_xtb_tx_not_pln(tx, Currency.USD, Decimal("3.9630"))
         assert result == expected
 
+    def test_should_convert_not_pln_deposit_transaction(self) -> None:
+        tx = XtbDepositWithdraw(
+            id="535704358",
+            type=TxType.DEPOSIT,
+            time=DateTime.fromisoformat("2024-04-22 10:15:41+02:00"),
+            currency_amount=Decimal("487.9"),
+        )
+        expected = [
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-04-22 10:15:41+02:00"),
+                ticker="Gotówka",
+                currency=Currency.PLN,
+                type=TxType.DEPOSIT,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=Decimal(1),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("1985.16752"),
+                fee=Decimal(0),
+                comment="ID:535704358",
+            ),
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-04-22 10:15:41+02:00"),
+                ticker="Waluty_USD",
+                currency=Currency.USD,
+                type=TxType.BUY,
+                amount=Decimal("487.9"),
+                price=Decimal(1),
+                pln_rate=Decimal("4.0688"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("1985.16752"),
+                fee=Decimal(0),
+                comment="ID:535704358",
+            ),
+        ]
+        result = convert_xtb_tx_not_pln(tx, Currency.USD, Decimal("4.0688"))
+        assert result == expected
+
+    def test_should_convert_not_pln_interest(self) -> None:
+        tx = XtbDividendInterest(
+            id="495802028",
+            time=DateTime.fromisoformat("2024-02-01 17:44:44+02:00"),
+            symbol="",
+            currency_amount=Decimal("0.13"),
+        )
+        expected = [
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-02-01 17:44:44+02:00"),
+                ticker="Waluty_EUR",
+                currency=Currency.EUR,
+                type=TxType.DIVIDEND_INTEREST,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=Decimal("4.3434"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("0.564642"),
+                fee=Decimal(0),
+                comment="ID:495802028",
+            ),
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-02-01 17:44:44+02:00"),
+                ticker="Waluty_EUR",
+                currency=Currency.EUR,
+                type=TxType.BUY,
+                amount=Decimal("0.13"),
+                price=Decimal(1),
+                pln_rate=Decimal("4.3434"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("0.564642"),
+                fee=Decimal(0),
+                comment="ID:495802028",
+            ),
+        ]
+        result = convert_xtb_tx_not_pln(tx, Currency.EUR, Decimal("4.3434"))
+        assert result == expected
+
+    def test_should_convert_not_pln_interest_costs(self) -> None:
+        tx = XtbCosts(
+            id="495802050",
+            time=DateTime.fromisoformat("2024-02-01 17:44:45+02:00"),
+            symbol="",
+            currency_amount=Decimal("-0.02"),
+        )
+        expected = [
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-02-01 17:44:45+02:00"),
+                ticker="Gotówka",
+                currency=Currency.PLN,
+                type=TxType.COSTS,
+                amount=Decimal(1),
+                price=Decimal(1),
+                pln_rate=Decimal("4.3434"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("0.086868"),
+                fee=Decimal(0),
+                comment="ID:495802050",
+            ),
+            InwestomatTx(
+                date=DateTime.fromisoformat("2024-02-01 17:44:45+02:00"),
+                ticker="Waluty_EUR",
+                currency=Currency.EUR,
+                type=TxType.SELL,
+                amount=Decimal("0.02"),
+                price=Decimal(1),
+                pln_rate=Decimal("4.3434"),
+                nominal_price=Decimal(1),
+                total_pln=Decimal("0.086868"),
+                fee=Decimal(0),
+                comment="ID:495802050",
+            ),
+        ]
+        result = convert_xtb_tx_not_pln(tx, Currency.EUR, Decimal("4.3434"))
+        assert result == expected
+
 
 @pytest.mark.webtest
 class Test_get_pln_rate:
