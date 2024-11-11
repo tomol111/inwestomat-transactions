@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+from collections.abc import (
+    Iterable,
+    Iterator,
+    Sequence,
+)
 import dataclasses
 from datetime import (
     date as Date,
@@ -15,13 +20,11 @@ import itertools
 import re
 import sys
 from typing import (
-    cast,
     Callable,
+    cast,
     Final,
-    Iterable,
-    Iterator,
     Literal,
-    Sequence,
+    Protocol,
     TextIO,
 )
 
@@ -32,15 +35,20 @@ import requests
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = cast(Args, parser.parse_args(argv))  # pyright: ignore[reportInvalidCast]
     match Exchange(args.exchange):
         case Exchange.BINANCE:
             convert_binance(args.input_path, sys.stdout)
         case Exchange.XTB:
             with open(args.input_path, "r", newline="") as input_file:
                 convert_xtb(input_file, sys.stdout, Currency(args.currency))
-        case _:
-            raise NotImplementedError(args.exchange)
+
+
+class Args(Protocol):
+    """Protokół argumentów otrzymanych za pomocą biblioteki 'argparse'"""
+    exchange: str
+    currency: str
+    input_path: str
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,9 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-c", "--currency", choices=[c.value for c in Currency],
         type=str.upper, default=Currency.PLN.value,
-        help=f"Waluta w jakiej konto jest denominowane (domyślnie: {Currency.PLN.value}). "
-        "Jeśli giełda nie posiada głównej waluty i informacja o walucie jest zawarta w danych "
-        "o transakcjach, ten parametr jest ignorowany."
+        help=(
+            f"Waluta w jakiej konto jest denominowane (domyślnie: {Currency.PLN.value}). "
+            + "Jeśli giełda nie posiada głównej waluty i informacja o walucie jest zawarta "
+            + "w danych o transakcjach, ten parametr jest ignorowany."
+        ),
     )
     parser.add_argument("input_path", help="Ściażka do pliku wejściowego.")
     return parser
@@ -273,8 +283,11 @@ def get_price(client: binance.Client, date: DateTime, market: Market) -> Decimal
     assert not date.microsecond
     start = int(date.timestamp() * 1000)
     end = start + 1
-    klines: list[list] = client.get_historical_klines("".join(market), "1s", start, end)
-    return Decimal(klines[0][KLineValue.CLOSE])
+    klines = client.get_historical_klines(
+        "".join(market), client.KLINE_INTERVAL_1SECOND, start, end
+    )
+    close_price = cast(str, klines[0][KLineValue.CLOSE])
+    return Decimal(close_price)
 
 
 def find_pln_prices(
@@ -291,6 +304,7 @@ def find_pln_prices(
 
 def read_binance_transactions(file_path: str) -> Iterator[BinanceTx]:
     worksheet = openpyxl.load_workbook(file_path, read_only=True).active
+    assert worksheet is not None
 
     max_col = 8
     rows = (
@@ -298,9 +312,10 @@ def read_binance_transactions(file_path: str) -> Iterator[BinanceTx]:
         for row in itertools.count(2)
     )
 
-    for date, market, typ, price, amount, total, fee, fee_coin in rows:
-        if date is None:
+    for row in rows:
+        if None in row:
             break
+        date, market, typ, price, amount, total, fee, fee_coin = cast(list[str], row)
         yield BinanceTx(
             date=DateTime.fromisoformat(date).replace(tzinfo=TimeZone.utc),
             market=identify_binance_market_assets(market),
@@ -465,9 +480,6 @@ def convert_xtb_tx(tx: XtbTx, currency: Currency, pln_rate: Decimal) -> list[Inw
                 comment=f"ID:{tx.id}",
             )
 
-        case unreachable:
-            raise AssertionError(f"Wyczerpane możliwości a otrzymano: {unreachable}")
-
     return [asset_tx] if currency == Currency.PLN else [asset_tx, currency_tx]
 
 
@@ -481,8 +493,8 @@ def get_pln_rate(currency: Currency, date: Date) -> Decimal:
         f"https://api.nbp.pl/api/exchangerates/rates/a/{currency.value.lower()}/{start}/{stop}",
         data={"format": "json"},
     )
-    data = response.json(parse_float=Decimal)
-    return data["rates"][-1]["mid"]
+    data = response.json(parse_float=Decimal)  # pyright: ignore[reportAny]
+    return data["rates"][-1]["mid"]  # pyright: ignore[reportAny]
 
 
 def convert_xtb_ticker(ticker: Ticker) -> Ticker:
